@@ -1,7 +1,81 @@
-﻿@page "/"
+@page "/"
+@using TurdTracker.Models
+@using TurdTracker.Services
+@inject IDiaryService DiaryService
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Diary</PageTitle>
 
-<h1>Hello, world!</h1>
+<MudContainer MaxWidth="MaxWidth.Small" Class="py-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Diary</MudText>
 
-Welcome to your new app.
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" Class="d-block mx-auto my-8" />
+    }
+    else if (_entries.Count == 0)
+    {
+        <MudPaper Class="pa-8 text-center" Elevation="2">
+            <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" Color="Color.Secondary" />
+            <MudText Typo="Typo.h6" Class="mt-4">No entries yet</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Start tracking by logging your first entry.</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => Navigation.NavigateTo("/log"))">
+                Log Entry
+            </MudButton>
+        </MudPaper>
+    }
+    else
+    {
+        <MudStack Spacing="2">
+            @foreach (var entry in _entries)
+            {
+                <MudPaper Class="pa-3 cursor-pointer" Elevation="2" @onclick="@(() => Navigation.NavigateTo($"/entry/{entry.Id}"))">
+                    <div class="d-flex align-center justify-space-between">
+                        <div class="d-flex align-center">
+                            <MudAvatar Color="Color.Primary" Size="Size.Medium" Class="mr-3">@entry.BristolType</MudAvatar>
+                            <div>
+                                <MudText Typo="Typo.subtitle1">@entry.Timestamp.ToString("ddd, d MMM yyyy — h:mm tt")</MudText>
+                                @if (!string.IsNullOrWhiteSpace(entry.Notes))
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">@Truncate(entry.Notes, 80)</MudText>
+                                }
+                            </div>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary" />
+                    </div>
+                    @if (entry.Tags.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap gap-1 mt-2 ml-13">
+                            @foreach (var tag in entry.Tags)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@tag</MudChip>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            }
+        </MudStack>
+    }
+</MudContainer>
+
+<MudFab Style="position: fixed; bottom: 24px; right: 24px;"
+        Color="Color.Primary"
+        StartIcon="@Icons.Material.Filled.Add"
+        OnClick="@(() => Navigation.NavigateTo("/log"))" />
+
+@code {
+    private List<DiaryEntry> _entries = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await DiaryService.GetAllAsync();
+        _entries = all.OrderByDescending(e => e.Timestamp).ToList();
+        _loading = false;
+    }
+
+    private static string Truncate(string text, int maxLength)
+    {
+        return text.Length <= maxLength ? text : text[..maxLength] + "…";
+    }
+}
