@@ -1,8 +1,177 @@
 @page "/calendar"
+@using TurdTracker.Models
+@using TurdTracker.Services
+@inject IDiaryService DiaryService
+@inject NavigationManager Navigation
 
 <PageTitle>Calendar</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="py-4">
-    <MudText Typo="Typo.h4" Class="mb-4">Calendar</MudText>
-    <MudText Color="Color.Secondary">Coming soon.</MudText>
+    <div class="d-flex align-center justify-space-between mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PreviousMonth" />
+        <MudText Typo="Typo.h5">@_currentMonth.ToString("MMMM yyyy")</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextMonth" />
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" Class="d-block mx-auto my-8" />
+    }
+    else
+    {
+        <MudPaper Elevation="2" Class="pa-2 mb-4">
+            <div class="calendar-grid">
+                @foreach (var dayName in _dayNames)
+                {
+                    <div class="calendar-header">
+                        <MudText Typo="Typo.caption" Align="Align.Center" Color="Color.Secondary">@dayName</MudText>
+                    </div>
+                }
+
+                @foreach (var day in _calendarDays)
+                {
+                    @if (day == null)
+                    {
+                        <div class="calendar-cell"></div>
+                    }
+                    else
+                    {
+                        var date = day.Value;
+                        var isToday = date == DateOnly.FromDateTime(DateTime.Today);
+                        var isSelected = date == _selectedDate;
+                        var count = GetEntryCount(date);
+                        <div class="calendar-cell @(isToday ? "today" : "") @(isSelected ? "selected" : "") @(count > 0 ? "has-entries" : "")"
+                             @onclick="@(() => SelectDate(date))">
+                            <MudText Typo="Typo.body2" Align="Align.Center"
+                                     Color="@(isToday ? Color.Primary : Color.Default)">
+                                <b>@date.Day</b>
+                            </MudText>
+                            @if (count > 0)
+                            {
+                                <div class="d-flex justify-center mt-1">
+                                    <MudBadge Content="@count" Color="Color.Primary" Overlap="false" Bordered="false">
+                                        <span></span>
+                                    </MudBadge>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </MudPaper>
+
+        @if (_selectedDate != null)
+        {
+            var selectedEntries = GetEntriesForDate(_selectedDate.Value);
+            <MudText Typo="Typo.h6" Class="mb-2">@_selectedDate.Value.ToString("dddd, d MMMM yyyy")</MudText>
+            @if (selectedEntries.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">No entries for this day.</MudText>
+            }
+            else
+            {
+                <MudStack Spacing="2">
+                    @foreach (var entry in selectedEntries)
+                    {
+                        <MudPaper Class="pa-3 cursor-pointer" Elevation="2" @onclick="@(() => Navigation.NavigateTo($"/entry/{entry.Id}"))">
+                            <div class="d-flex align-center justify-space-between">
+                                <div class="d-flex align-center">
+                                    <MudAvatar Color="Color.Primary" Size="Size.Medium" Class="mr-3">@entry.BristolType</MudAvatar>
+                                    <div>
+                                        <MudText Typo="Typo.subtitle1">@entry.Timestamp.ToString("h:mm tt")</MudText>
+                                        @if (!string.IsNullOrWhiteSpace(entry.Notes))
+                                        {
+                                            <MudText Typo="Typo.body2" Color="Color.Secondary">@Truncate(entry.Notes, 60)</MudText>
+                                        }
+                                    </div>
+                                </div>
+                                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Secondary" />
+                            </div>
+                            @if (entry.Tags.Count > 0)
+                            {
+                                <div class="d-flex flex-wrap gap-1 mt-2 ml-13">
+                                    @foreach (var tag in entry.Tags)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@tag</MudChip>
+                                    }
+                                </div>
+                            }
+                        </MudPaper>
+                    }
+                </MudStack>
+            }
+        }
+    }
 </MudContainer>
+
+@code {
+    private List<DiaryEntry> _entries = [];
+    private bool _loading = true;
+    private DateTime _currentMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateOnly? _selectedDate;
+    private Dictionary<DateOnly, List<DiaryEntry>> _entriesByDate = new();
+
+    private static readonly string[] _dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _entries = await DiaryService.GetAllAsync();
+        _entriesByDate = _entries
+            .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
+            .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
+        _selectedDate = DateOnly.FromDateTime(DateTime.Today);
+        _loading = false;
+    }
+
+    private List<DateOnly?> _calendarDays
+    {
+        get
+        {
+            var days = new List<DateOnly?>();
+            var firstDay = new DateOnly(_currentMonth.Year, _currentMonth.Month, 1);
+            var daysInMonth = DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
+
+            // Monday = 0, Sunday = 6
+            var startOffset = ((int)firstDay.DayOfWeek + 6) % 7;
+            for (var i = 0; i < startOffset; i++)
+                days.Add(null);
+
+            for (var d = 1; d <= daysInMonth; d++)
+                days.Add(new DateOnly(_currentMonth.Year, _currentMonth.Month, d));
+
+            return days;
+        }
+    }
+
+    private int GetEntryCount(DateOnly date)
+    {
+        return _entriesByDate.TryGetValue(date, out var list) ? list.Count : 0;
+    }
+
+    private List<DiaryEntry> GetEntriesForDate(DateOnly date)
+    {
+        return _entriesByDate.TryGetValue(date, out var list) ? list : [];
+    }
+
+    private void SelectDate(DateOnly date)
+    {
+        _selectedDate = date;
+    }
+
+    private void PreviousMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(-1);
+        _selectedDate = null;
+    }
+
+    private void NextMonth()
+    {
+        _currentMonth = _currentMonth.AddMonths(1);
+        _selectedDate = null;
+    }
+
+    private static string Truncate(string text, int maxLength)
+    {
+        return text.Length <= maxLength ? text : text[..maxLength] + "…";
+    }
+}

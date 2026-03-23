@@ -1,0 +1,36 @@
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.calendar-header {
+    padding: 4px;
+    text-align: center;
+}
+
+.calendar-cell {
+    padding: 6px 2px;
+    min-height: 48px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.calendar-cell:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.calendar-cell.today {
+    border: 2px solid var(--mud-palette-primary);
+    border-radius: 8px;
+}
+
+.calendar-cell.selected {
+    background-color: rgba(var(--mud-palette-primary-rgb), 0.15);
+    border-radius: 8px;
+}
+
+.calendar-cell.has-entries {
+    font-weight: bold;
+}
