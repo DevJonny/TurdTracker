@@ -1,0 +1,13 @@
+::deep .bristol-card {
+    transition: border 0.2s ease, background-color 0.2s ease;
+    border: 2px solid transparent;
+}
+
+::deep .bristol-card-selected {
+    border: 2px solid var(--mud-palette-primary);
+    background-color: var(--mud-palette-primary-hover);
+}
+
+::deep .bristol-card:hover {
+    border-color: var(--mud-palette-primary-lighten);
+}

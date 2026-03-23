@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!-- Bristol Type 6: Fluffy/mushy pieces with ragged edges -->
+  <path d="M 10 35 Q 14 26 20 30 Q 24 22 30 28 Q 34 20 40 26 Q 44 18 50 25 Q 56 19 62 27 Q 68 22 72 32 Q 76 40 70 46 Q 64 54 56 50 Q 50 58 42 52 Q 36 60 28 54 Q 20 60 14 52 Q 6 46 10 35 Z" fill="#A0522D" />
+  <!-- Fluffy texture bumps -->
+  <circle cx="22" cy="28" r="5" fill="#8B6914" opacity="0.7" />
+  <circle cx="38" cy="24" r="5" fill="#8B6914" opacity="0.7" />
+  <circle cx="54" cy="26" r="5" fill="#8B6914" opacity="0.7" />
+  <circle cx="66" cy="34" r="4" fill="#8B6914" opacity="0.7" />
+  <circle cx="62" cy="48" r="5" fill="#6B4226" opacity="0.6" />
+  <circle cx="44" cy="54" r="5" fill="#6B4226" opacity="0.6" />
+  <circle cx="26" cy="52" r="4" fill="#6B4226" opacity="0.6" />
+  <circle cx="14" cy="44" r="4" fill="#6B4226" opacity="0.6" />
+</svg>

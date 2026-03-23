@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!-- Bristol Type 2: Lumpy sausage shape -->
+  <ellipse cx="40" cy="40" rx="32" ry="16" fill="#A0522D" />
+  <!-- Lumps on surface -->
+  <circle cx="14" cy="38" r="9" fill="#8B6914" />
+  <circle cx="26" cy="34" r="8" fill="#A0522D" />
+  <circle cx="40" cy="32" r="9" fill="#8B6914" />
+  <circle cx="54" cy="34" r="8" fill="#A0522D" />
+  <circle cx="66" cy="38" r="9" fill="#8B6914" />
+  <!-- Base to merge lumps -->
+  <ellipse cx="40" cy="42" rx="30" ry="12" fill="#8B6914" />
+</svg>

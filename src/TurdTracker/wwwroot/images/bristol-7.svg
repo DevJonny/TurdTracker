@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!-- Bristol Type 7: Watery/liquid drops -->
+  <!-- Large central liquid pool -->
+  <ellipse cx="40" cy="52" rx="28" ry="10" fill="#A0522D" opacity="0.5" />
+  <!-- Drop 1 (large) -->
+  <path d="M 40 10 Q 46 22 46 30 Q 46 38 40 38 Q 34 38 34 30 Q 34 22 40 10 Z" fill="#8B6914" />
+  <!-- Drop 2 (small left) -->
+  <path d="M 18 28 Q 22 35 22 40 Q 22 46 18 46 Q 14 46 14 40 Q 14 35 18 28 Z" fill="#A0522D" />
+  <!-- Drop 3 (small right) -->
+  <path d="M 62 24 Q 66 31 66 36 Q 66 42 62 42 Q 58 42 58 36 Q 58 31 62 24 Z" fill="#A0522D" />
+  <!-- Splash marks -->
+  <ellipse cx="26" cy="54" rx="6" ry="3" fill="#8B6914" opacity="0.6" />
+  <ellipse cx="54" cy="57" rx="5" ry="2.5" fill="#8B6914" opacity="0.6" />
+  <ellipse cx="40" cy="60" rx="8" ry="3" fill="#6B4226" opacity="0.5" />
+  <!-- Small droplets -->
+  <circle cx="14" cy="58" r="2.5" fill="#A0522D" opacity="0.7" />
+  <circle cx="66" cy="55" r="2" fill="#A0522D" opacity="0.7" />
+  <circle cx="32" cy="65" r="2" fill="#8B6914" opacity="0.6" />
+</svg>

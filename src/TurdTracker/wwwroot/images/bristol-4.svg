@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!-- Bristol Type 4: Smooth sausage/snake shape -->
+  <path d="M 8 40 Q 20 28 40 40 Q 60 52 72 40" stroke="#A0522D" stroke-width="16" stroke-linecap="round" fill="none" />
+  <!-- Highlight for smooth look -->
+  <path d="M 10 38 Q 22 27 40 38 Q 58 49 70 38" stroke="#B8762D" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.5" />
+</svg>

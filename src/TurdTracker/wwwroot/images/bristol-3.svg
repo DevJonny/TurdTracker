@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80">
+  <!-- Bristol Type 3: Sausage shape with cracks on surface -->
+  <ellipse cx="40" cy="40" rx="33" ry="14" fill="#A0522D" />
+  <!-- Crack lines on surface -->
+  <line x1="18" y1="34" x2="22" y2="40" stroke="#6B4226" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="28" y1="31" x2="31" y2="38" stroke="#6B4226" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="40" y1="30" x2="40" y2="37" stroke="#6B4226" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="50" y1="31" x2="49" y2="38" stroke="#6B4226" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="61" y1="34" x2="58" y2="40" stroke="#6B4226" stroke-width="1.5" stroke-linecap="round" />
+  <!-- Highlight -->
+  <ellipse cx="40" cy="36" rx="28" ry="5" fill="#B8762D" opacity="0.4" />
+</svg>

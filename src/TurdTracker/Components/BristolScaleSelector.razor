@@ -1,0 +1,55 @@
+@namespace TurdTracker.Components
+
+<MudText Typo="Typo.h6" Class="mb-2">Bristol Stool Scale</MudText>
+
+<MudGrid Spacing="2">
+    @foreach (var item in BristolTypes)
+    {
+        var type = item;
+        <MudItem xs="12" sm="6">
+            <MudPaper Class="@GetCardClass(type.Type)" Elevation="2" @onclick="() => SelectType(type.Type)" Style="cursor: pointer;">
+                <div class="d-flex align-center pa-3">
+                    <MudImage Src="@($"images/bristol-{type.Type}.svg")" Width="60" Height="60" Alt="@($"Type {type.Type}")" Class="mr-3" />
+                    <div>
+                        <MudText Typo="Typo.subtitle1"><strong>Type @type.Type</strong> — @type.Name</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@type.Description</MudText>
+                    </div>
+                </div>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter]
+    public int SelectedType { get; set; }
+
+    [Parameter]
+    public EventCallback<int> SelectedTypeChanged { get; set; }
+
+    private async Task SelectType(int type)
+    {
+        SelectedType = type;
+        await SelectedTypeChanged.InvokeAsync(type);
+    }
+
+    private string GetCardClass(int type)
+    {
+        return SelectedType == type
+            ? "bristol-card bristol-card-selected"
+            : "bristol-card";
+    }
+
+    private static readonly List<BristolTypeInfo> BristolTypes =
+    [
+        new(1, "Separate hard lumps", "Hard to pass, like nuts"),
+        new(2, "Lumpy sausage", "Sausage-shaped but lumpy"),
+        new(3, "Cracked sausage", "Like a sausage with cracks on the surface"),
+        new(4, "Smooth sausage", "Like a sausage or snake, smooth and soft"),
+        new(5, "Soft blobs", "Soft blobs with clear-cut edges, passed easily"),
+        new(6, "Fluffy pieces", "Fluffy pieces with ragged edges, mushy"),
+        new(7, "Watery", "Watery, no solid pieces, entirely liquid"),
+    ];
+
+    private record BristolTypeInfo(int Type, string Name, string Description);
+}
