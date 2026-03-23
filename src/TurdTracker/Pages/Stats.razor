@@ -30,6 +30,25 @@
                   Height="300px"
                   ChartOptions="@_chartOptions" Class="mb-4" />
     }
+
+    <MudDivider Class="my-4" />
+
+    <MudText Typo="Typo.h6" Class="mb-2">Bristol Type Distribution</MudText>
+
+    @if (_bristolData.All(d => d == 0))
+    {
+        <MudText Color="Color.Secondary" Class="mb-4">No entries to display.</MudText>
+    }
+    else
+    {
+        <MudChart T="double"
+                  ChartType="ChartType.Bar"
+                  ChartSeries="@_bristolSeries"
+                  ChartLabels="@_bristolLabels"
+                  Width="100%"
+                  Height="300px"
+                  ChartOptions="@_bristolChartOptions" Class="mb-4" />
+    }
 </MudContainer>
 
 @code {
@@ -40,10 +59,33 @@
     private List<ChartSeries<double>> _frequencySeries = [];
     private BarChartOptions _chartOptions = new() { YAxisTicks = 1 };
 
+    private double[] _bristolData = new double[7];
+    private string[] _bristolLabels = ["Type 1", "Type 2", "Type 3", "Type 4", "Type 5", "Type 6", "Type 7"];
+    private List<ChartSeries<double>> _bristolSeries = [];
+    private BarChartOptions _bristolChartOptions = new() { YAxisTicks = 1 };
+
     protected override async Task OnInitializedAsync()
     {
         _entries = await DiaryService.GetAllAsync();
         BuildFrequencyChart();
+        BuildBristolDistribution();
+    }
+
+    private void BuildBristolDistribution()
+    {
+        _bristolData = new double[7];
+        foreach (var entry in _entries)
+        {
+            if (entry.BristolType >= 1 && entry.BristolType <= 7)
+            {
+                _bristolData[entry.BristolType - 1]++;
+            }
+        }
+
+        _bristolSeries = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double> { Name = "Count", Data = _bristolData }
+        };
     }
 
     private void OnRangeChanged(string value)
