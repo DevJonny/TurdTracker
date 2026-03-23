@@ -1,8 +1,39 @@
 @page "/settings"
+@inject IThemeService ThemeService
 
 <PageTitle>Settings</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="py-4">
     <MudText Typo="Typo.h4" Class="mb-4">Settings</MudText>
-    <MudText Color="Color.Secondary">Coming soon.</MudText>
+
+    <MudPaper Class="pa-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Appearance</MudText>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@(_isDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode)" />
+                <MudText>@(_isDarkMode ? "Dark Mode" : "Light Mode")</MudText>
+            </MudStack>
+            <MudSwitch T="bool" Value="_isDarkMode" ValueChanged="@ToggleTheme"
+                       Color="Color.Primary" />
+        </MudStack>
+    </MudPaper>
 </MudContainer>
+
+@code {
+    private bool _isDarkMode = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isDarkMode = await ThemeService.GetIsDarkModeAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme(bool value)
+    {
+        _isDarkMode = value;
+        await ThemeService.SetIsDarkModeAsync(_isDarkMode);
+    }
+}

@@ -13,5 +13,6 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.
 builder.Services.AddMudServices();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<IDiaryService, DiaryService>();
+builder.Services.AddScoped<IThemeService, ThemeService>();
 
 await builder.Build().RunAsync();

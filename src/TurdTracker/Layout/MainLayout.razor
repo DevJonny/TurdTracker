@@ -1,7 +1,8 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
+@inject IThemeService ThemeService
 
-<MudThemeProvider />
+<MudThemeProvider Theme="_theme" @bind-IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -11,6 +12,9 @@
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        OnClick="@ToggleDrawer" Class="desktop-only" />
         <MudText Typo="Typo.h6">TurdTracker</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                       Color="Color.Inherit" OnClick="@ToggleTheme" />
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Class="desktop-only">
@@ -41,6 +45,51 @@
 
 @code {
     private bool _drawerOpen = true;
+    private bool _isDarkMode = true;
+
+    private MudTheme _theme = new MudTheme
+    {
+        PaletteDark = new PaletteDark
+        {
+            Black = "#1a1a1a",
+            Background = "#2d2d2d",
+            Surface = "#363636",
+            AppbarBackground = "#2d2d2d",
+            DrawerBackground = "#2d2d2d",
+            Primary = "#7c4dff",
+            Secondary = "#03dac6",
+            Tertiary = "#bb86fc",
+            TextPrimary = "#e0e0e0",
+            TextSecondary = "#a0a0a0",
+            ActionDefault = "#b0b0b0",
+            DrawerText = "#e0e0e0",
+            DrawerIcon = "#a0a0a0",
+            AppbarText = "#e0e0e0",
+        },
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#5e35b1",
+            Secondary = "#00897b",
+            Tertiary = "#7c4dff",
+            AppbarBackground = "#5e35b1",
+            AppbarText = "#ffffff",
+        }
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isDarkMode = await ThemeService.GetIsDarkModeAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+        await ThemeService.SetIsDarkModeAsync(_isDarkMode);
+    }
 
     private void ToggleDrawer()
     {
