@@ -49,6 +49,25 @@
                   Height="300px"
                   ChartOptions="@_bristolChartOptions" Class="mb-4" />
     }
+
+    <MudDivider Class="my-4" />
+
+    <MudText Typo="Typo.h6" Class="mb-2">Time of Day Patterns</MudText>
+
+    @if (_timeOfDayData.All(d => d == 0))
+    {
+        <MudText Color="Color.Secondary" Class="mb-4">No entries to display.</MudText>
+    }
+    else
+    {
+        <MudChart T="double"
+                  ChartType="ChartType.Bar"
+                  ChartSeries="@_timeOfDaySeries"
+                  ChartLabels="@_timeOfDayLabels"
+                  Width="100%"
+                  Height="300px"
+                  ChartOptions="@_timeOfDayChartOptions" Class="mb-4" />
+    }
 </MudContainer>
 
 @code {
@@ -64,11 +83,17 @@
     private List<ChartSeries<double>> _bristolSeries = [];
     private BarChartOptions _bristolChartOptions = new() { YAxisTicks = 1 };
 
+    private double[] _timeOfDayData = new double[24];
+    private string[] _timeOfDayLabels = Enumerable.Range(0, 24).Select(h => h % 3 == 0 ? $"{h:D2}:00" : "").ToArray();
+    private List<ChartSeries<double>> _timeOfDaySeries = [];
+    private BarChartOptions _timeOfDayChartOptions = new() { YAxisTicks = 1 };
+
     protected override async Task OnInitializedAsync()
     {
         _entries = await DiaryService.GetAllAsync();
         BuildFrequencyChart();
         BuildBristolDistribution();
+        BuildTimeOfDayChart();
     }
 
     private void BuildBristolDistribution()
@@ -85,6 +110,20 @@
         _bristolSeries = new List<ChartSeries<double>>
         {
             new ChartSeries<double> { Name = "Count", Data = _bristolData }
+        };
+    }
+
+    private void BuildTimeOfDayChart()
+    {
+        _timeOfDayData = new double[24];
+        foreach (var entry in _entries)
+        {
+            _timeOfDayData[entry.Timestamp.Hour]++;
+        }
+
+        _timeOfDaySeries = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double> { Name = "Entries", Data = _timeOfDayData }
         };
     }
 
