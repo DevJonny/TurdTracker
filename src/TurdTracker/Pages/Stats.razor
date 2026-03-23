@@ -1,8 +1,115 @@
 @page "/stats"
+@using TurdTracker.Models
+@using MudBlazor.Charts
+@inject IDiaryService DiaryService
 
 <PageTitle>Stats</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="py-4">
     <MudText Typo="Typo.h4" Class="mb-4">Stats</MudText>
-    <MudText Color="Color.Secondary">Coming soon.</MudText>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Frequency Over Time</MudText>
+
+    <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection" SelectedValue="@_selectedRange" SelectedValueChanged="OnRangeChanged" Class="mb-4">
+        <MudChip T="string" Value="@("7")">Last 7 days</MudChip>
+        <MudChip T="string" Value="@("30")">Last 30 days</MudChip>
+        <MudChip T="string" Value="@("90")">Last 90 days</MudChip>
+    </MudChipSet>
+
+    @if (_frequencyData.Length == 0)
+    {
+        <MudText Color="Color.Secondary" Class="mb-4">No entries in the selected range.</MudText>
+    }
+    else
+    {
+        <MudChart T="double"
+                  ChartType="ChartType.Bar"
+                  ChartSeries="@_frequencySeries"
+                  ChartLabels="@_frequencyLabels"
+                  Width="100%"
+                  Height="300px"
+                  ChartOptions="@_chartOptions" Class="mb-4" />
+    }
 </MudContainer>
+
+@code {
+    private List<DiaryEntry> _entries = [];
+    private string _selectedRange = "7";
+    private double[] _frequencyData = [];
+    private string[] _frequencyLabels = [];
+    private List<ChartSeries<double>> _frequencySeries = [];
+    private BarChartOptions _chartOptions = new() { YAxisTicks = 1 };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _entries = await DiaryService.GetAllAsync();
+        BuildFrequencyChart();
+    }
+
+    private void OnRangeChanged(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return;
+        _selectedRange = value;
+        BuildFrequencyChart();
+    }
+
+    private void BuildFrequencyChart()
+    {
+        var days = int.Parse(_selectedRange);
+        var today = DateTime.Today;
+        var startDate = today.AddDays(-(days - 1));
+
+        var entriesByDate = _entries
+            .Where(e => e.Timestamp.Date >= startDate && e.Timestamp.Date <= today)
+            .GroupBy(e => e.Timestamp.Date)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        if (days <= 7)
+        {
+            _frequencyData = new double[days];
+            _frequencyLabels = new string[days];
+            for (int i = 0; i < days; i++)
+            {
+                var date = startDate.AddDays(i);
+                _frequencyLabels[i] = date.ToString("dd/MM");
+                _frequencyData[i] = entriesByDate.GetValueOrDefault(date, 0);
+            }
+        }
+        else if (days <= 30)
+        {
+            _frequencyData = new double[days];
+            _frequencyLabels = new string[days];
+            for (int i = 0; i < days; i++)
+            {
+                var date = startDate.AddDays(i);
+                _frequencyLabels[i] = i % 5 == 0 ? date.ToString("dd/MM") : "";
+                _frequencyData[i] = entriesByDate.GetValueOrDefault(date, 0);
+            }
+        }
+        else
+        {
+            var weeks = (int)Math.Ceiling(days / 7.0);
+            _frequencyData = new double[weeks];
+            _frequencyLabels = new string[weeks];
+            for (int w = 0; w < weeks; w++)
+            {
+                var weekStart = startDate.AddDays(w * 7);
+                var weekEnd = weekStart.AddDays(6);
+                if (weekEnd > today) weekEnd = today;
+
+                _frequencyLabels[w] = weekStart.ToString("dd/MM");
+                double count = 0;
+                for (var d = weekStart; d <= weekEnd; d = d.AddDays(1))
+                {
+                    count += entriesByDate.GetValueOrDefault(d, 0);
+                }
+                _frequencyData[w] = count;
+            }
+        }
+
+        _frequencySeries = new List<ChartSeries<double>>
+        {
+            new ChartSeries<double> { Name = "Entries", Data = _frequencyData }
+        };
+    }
+}
