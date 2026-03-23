@@ -1,0 +1,123 @@
+@page "/export"
+@using TurdTracker.Models
+@inject IDiaryService DiaryService
+@inject IJSRuntime JS
+
+<PageTitle>Export Diary</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="py-4 no-print">
+    <MudText Typo="Typo.h4" Class="mb-4">Export Diary</MudText>
+
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Date Range (Optional)</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+            <MudDatePicker @bind-Date="_startDate" Label="From" Clearable="true" />
+            <MudDatePicker @bind-Date="_endDate" Label="To" Clearable="true" />
+        </MudStack>
+    </MudPaper>
+
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.PictureAsPdf"
+               OnClick="PrintExport" Disabled="_loading || _filteredEntries.Count == 0"
+               FullWidth="true" Size="Size.Large">
+        Export as PDF
+    </MudButton>
+
+    @if (!_loading && _filteredEntries.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mt-3">No entries found for the selected date range.</MudAlert>
+    }
+</MudContainer>
+
+@if (_filteredEntries.Count > 0)
+{
+    <div class="print-only print-content">
+        <h1>TurdTracker — Diary Export</h1>
+        <p class="print-subtitle">
+            @if (_startDate.HasValue || _endDate.HasValue)
+            {
+                <span>
+                    @(_startDate?.ToString("d MMM yyyy") ?? "Start")
+                    &mdash;
+                    @(_endDate?.ToString("d MMM yyyy") ?? "Present")
+                </span>
+            }
+            else
+            {
+                <span>All entries</span>
+            }
+            &nbsp;&bull;&nbsp; @_filteredEntries.Count entries
+            &nbsp;&bull;&nbsp; Generated @DateTime.Now.ToString("d MMM yyyy, h:mm tt")
+        </p>
+
+        <table class="print-table">
+            <thead>
+                <tr>
+                    <th>Date &amp; Time</th>
+                    <th>Bristol Type</th>
+                    <th>Tags</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var entry in _filteredEntries)
+                {
+                    <tr>
+                        <td>@entry.Timestamp.ToString("ddd, d MMM yyyy — h:mm tt")</td>
+                        <td>Type @entry.BristolType — @GetBristolName(entry.BristolType)</td>
+                        <td>@(entry.Tags.Count > 0 ? string.Join(", ", entry.Tags) : "—")</td>
+                        <td>@(string.IsNullOrWhiteSpace(entry.Notes) ? "—" : entry.Notes)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private List<DiaryEntry> _allEntries = [];
+    private List<DiaryEntry> _filteredEntries = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var all = await DiaryService.GetAllAsync();
+        _allEntries = all.OrderByDescending(e => e.Timestamp).ToList();
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private void ApplyFilter()
+    {
+        _filteredEntries = _allEntries.Where(e =>
+        {
+            if (_startDate.HasValue && e.Timestamp.Date < _startDate.Value.Date)
+                return false;
+            if (_endDate.HasValue && e.Timestamp.Date > _endDate.Value.Date)
+                return false;
+            return true;
+        }).ToList();
+    }
+
+    private async Task PrintExport()
+    {
+        ApplyFilter();
+        StateHasChanged();
+        await Task.Delay(100); // allow render
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private static string GetBristolName(int type) => type switch
+    {
+        1 => "Separate hard lumps",
+        2 => "Lumpy, sausage-shaped",
+        3 => "Sausage with cracks",
+        4 => "Smooth, soft sausage",
+        5 => "Soft blobs with clear edges",
+        6 => "Fluffy, mushy pieces",
+        7 => "Watery, no solid pieces",
+        _ => "Unknown"
+    };
+}

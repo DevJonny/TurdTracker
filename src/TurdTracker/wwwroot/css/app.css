@@ -113,3 +113,67 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Print styles for PDF export */
+.print-only {
+    display: none;
+}
+
+@media print {
+    .no-print,
+    .mud-appbar,
+    .mud-drawer,
+    .bottom-nav,
+    .mud-fab {
+        display: none !important;
+    }
+
+    .print-only {
+        display: block !important;
+    }
+
+    .mud-main-content {
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .print-content {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        color: #000;
+        padding: 20px;
+    }
+
+    .print-content h1 {
+        font-size: 20px;
+        margin-bottom: 4px;
+    }
+
+    .print-subtitle {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 16px;
+    }
+
+    .print-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+    }
+
+    .print-table th,
+    .print-table td {
+        border: 1px solid #ccc;
+        padding: 6px 8px;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .print-table th {
+        background-color: #f0f0f0;
+        font-weight: 600;
+    }
+
+    .print-table tr:nth-child(even) {
+        background-color: #fafafa;
+    }
+}
