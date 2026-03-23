@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
 
 <MudThemeProvider />
 <MudPopoverProvider />
@@ -6,7 +7,56 @@
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudMainContent>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="@ToggleDrawer" Class="desktop-only" />
+        <MudText Typo="Typo.h6">TurdTracker</MudText>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Class="desktop-only">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">TurdTracker</MudText>
+        </MudDrawerHeader>
+        <MudNavMenu>
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.MenuBook">Diary</MudNavLink>
+            <MudNavLink Href="/calendar" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.CalendarMonth">Calendar</MudNavLink>
+            <MudNavLink Href="/stats" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.BarChart">Stats</MudNavLink>
+            <MudNavLink Href="/settings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Settings">Settings</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="main-content">
         @Body
     </MudMainContent>
+
+    <div class="bottom-nav mobile-only">
+        <MudToolBar Dense="true" Class="justify-center">
+            <MudIconButton Icon="@Icons.Material.Filled.MenuBook" Color="@GetNavColor("/")" OnClick="@(() => Navigation.NavigateTo("/"))" />
+            <MudIconButton Icon="@Icons.Material.Filled.CalendarMonth" Color="@GetNavColor("/calendar")" OnClick="@(() => Navigation.NavigateTo("/calendar"))" />
+            <MudIconButton Icon="@Icons.Material.Filled.BarChart" Color="@GetNavColor("/stats")" OnClick="@(() => Navigation.NavigateTo("/stats"))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Settings" Color="@GetNavColor("/settings")" OnClick="@(() => Navigation.NavigateTo("/settings"))" />
+        </MudToolBar>
+    </div>
 </MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private Color GetNavColor(string href)
+    {
+        var uri = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var path = "/" + uri;
+
+        if (href == "/")
+        {
+            return (path == "/" || path == "") ? Color.Primary : Color.Inherit;
+        }
+
+        return path.StartsWith(href) ? Color.Primary : Color.Inherit;
+    }
+}
