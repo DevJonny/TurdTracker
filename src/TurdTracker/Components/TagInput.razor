@@ -1,0 +1,109 @@
+@using TurdTracker.Services
+@inject IDiaryService DiaryService
+
+<div class="tag-input-container">
+    <MudTextField T="string"
+                  Label="Tags (optional)"
+                  @bind-Value="_inputText"
+                  Placeholder="Type a tag and press Enter"
+                  Variant="Variant.Outlined"
+                  Adornment="Adornment.End"
+                  AdornmentIcon="@Icons.Material.Filled.Add"
+                  OnAdornmentClick="AddCurrentTag"
+                  OnKeyDown="OnKeyDown" />
+
+    @if (Tags.Count > 0)
+    {
+        <div class="d-flex flex-wrap gap-1 mt-2">
+            @foreach (var tag in Tags)
+            {
+                <MudChip T="string"
+                         Color="Color.Primary"
+                         Variant="Variant.Filled"
+                         Size="Size.Small"
+                         OnClose="() => RemoveTag(tag)">@tag</MudChip>
+            }
+        </div>
+    }
+
+    @if (_recentTags.Count > 0)
+    {
+        <div class="mt-3">
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-1">Recent tags</MudText>
+            <div class="d-flex flex-wrap gap-1">
+                @foreach (var tag in _recentTags)
+                {
+                    <MudChip T="string"
+                             Color="Color.Default"
+                             Variant="Variant.Outlined"
+                             Size="Size.Small"
+                             OnClick="() => AddTag(tag)">@tag</MudChip>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<string> Tags { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<List<string>> TagsChanged { get; set; }
+
+    private string _inputText = string.Empty;
+    private List<string> _recentTags = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRecentTags();
+    }
+
+    private async Task LoadRecentTags()
+    {
+        var entries = await DiaryService.GetAllAsync();
+        _recentTags = entries
+            .SelectMany(e => e.Tags)
+            .GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .Where(t => !Tags.Contains(t, StringComparer.OrdinalIgnoreCase))
+            .Take(10)
+            .ToList();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AddCurrentTag();
+        }
+    }
+
+    private async Task AddCurrentTag()
+    {
+        var tag = _inputText.Trim();
+        if (!string.IsNullOrEmpty(tag))
+        {
+            await AddTag(tag);
+            _inputText = string.Empty;
+        }
+    }
+
+    private async Task AddTag(string tag)
+    {
+        if (!Tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+        {
+            Tags.Add(tag);
+            await TagsChanged.InvokeAsync(Tags);
+            _recentTags.Remove(tag);
+        }
+    }
+
+    private async Task RemoveTag(string tag)
+    {
+        Tags.Remove(tag);
+        await TagsChanged.InvokeAsync(Tags);
+        await LoadRecentTags();
+    }
+}

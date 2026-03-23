@@ -29,6 +29,10 @@
 
         <MudTextField T="string" Label="Notes (optional)" @bind-Value="_notes" Lines="3" Class="mt-4" Variant="Variant.Outlined" />
 
+        <div class="mt-4">
+            <TagInput @bind-Tags="_tags" />
+        </div>
+
         <div class="d-flex justify-end mt-4">
             <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="Cancel" Class="mr-2">Cancel</MudButton>
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Save</MudButton>
@@ -41,6 +45,7 @@
     private TimeSpan? _time = DateTime.Now.TimeOfDay;
     private int _bristolType;
     private string _notes = string.Empty;
+    private List<string> _tags = [];
     private bool _showValidation;
 
     private async Task Save()
@@ -54,7 +59,8 @@
         {
             Timestamp = _date.Value.Date + _time.Value,
             BristolType = _bristolType,
-            Notes = _notes
+            Notes = _notes,
+            Tags = _tags
         };
 
         await DiaryService.AddAsync(entry);
