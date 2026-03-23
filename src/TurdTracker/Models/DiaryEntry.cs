@@ -1,0 +1,10 @@
+namespace TurdTracker.Models;
+
+public class DiaryEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public DateTime Timestamp { get; set; } = DateTime.Now;
+    public int BristolType { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public List<string> Tags { get; set; } = [];
+}
