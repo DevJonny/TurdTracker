@@ -1,0 +1,68 @@
+@page "/log"
+@using TurdTracker.Models
+@using TurdTracker.Services
+@inject IDiaryService DiaryService
+@inject NavigationManager Navigation
+
+<PageTitle>Log Entry</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="py-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Log Entry</MudText>
+
+    <MudPaper Class="pa-4" Elevation="2">
+        <MudGrid Spacing="3">
+            <MudItem xs="6">
+                <MudDatePicker Label="Date" @bind-Date="_date" Required="true" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudTimePicker Label="Time" @bind-Time="_time" Required="true" />
+            </MudItem>
+        </MudGrid>
+
+        <div class="mt-4">
+            <BristolScaleSelector @bind-SelectedType="_bristolType" />
+            @if (_showValidation && _bristolType == 0)
+            {
+                <MudText Color="Color.Error" Typo="Typo.caption" Class="mt-1">Please select a Bristol type</MudText>
+            }
+        </div>
+
+        <MudTextField T="string" Label="Notes (optional)" @bind-Value="_notes" Lines="3" Class="mt-4" Variant="Variant.Outlined" />
+
+        <div class="d-flex justify-end mt-4">
+            <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="Cancel" Class="mr-2">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Save</MudButton>
+        </div>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private DateTime? _date = DateTime.Today;
+    private TimeSpan? _time = DateTime.Now.TimeOfDay;
+    private int _bristolType;
+    private string _notes = string.Empty;
+    private bool _showValidation;
+
+    private async Task Save()
+    {
+        _showValidation = true;
+
+        if (_bristolType == 0 || _date == null || _time == null)
+            return;
+
+        var entry = new DiaryEntry
+        {
+            Timestamp = _date.Value.Date + _time.Value,
+            BristolType = _bristolType,
+            Notes = _notes
+        };
+
+        await DiaryService.AddAsync(entry);
+        Navigation.NavigateTo("/");
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/");
+    }
+}
