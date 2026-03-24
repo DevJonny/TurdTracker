@@ -17,7 +17,8 @@
         <MudText Typo="Typo.h6">TurdTracker</MudText>
         <MudSpacer />
         <MudTooltip Text="@GetSyncTooltip()">
-            <MudIconButton Icon="@GetSyncIcon()" Color="@GetSyncColor()" OnClick="@OnSyncIconClick" />
+            <MudIconButton Icon="@GetSyncIcon()" Color="@GetSyncColor()" OnClick="@OnSyncIconClick"
+                           Class="@(SyncService.SyncStatus == SyncStatus.Syncing ? "sync-spinning" : "")" />
         </MudTooltip>
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit" OnClick="@ToggleTheme" />

@@ -3,6 +3,10 @@
     to { transform: rotate(360deg); }
 }
 
+::deep .sync-spinning svg {
+    animation: spin 1s linear infinite;
+}
+
 .main-content {
     padding-bottom: 56px;
 }
