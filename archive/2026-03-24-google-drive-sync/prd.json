@@ -1,0 +1,190 @@
+{
+  "project": "TurdTracker",
+  "branchName": "ralph/google-drive-sync",
+  "description": "Google Drive Sync — Automatic multi-device sync via Google Drive with additive merge, soft deletes, and OAuth sign-in",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add sync metadata fields to DiaryEntry model",
+      "description": "As a developer, I need LastModified and IsDeleted fields on DiaryEntry so the sync engine can resolve conflicts and propagate deletions.",
+      "acceptanceCriteria": [
+        "DiaryEntry model has 'DateTime LastModified' property with default DateTime.UtcNow",
+        "DiaryEntry model has 'bool IsDeleted' property with default false",
+        "New SyncEnvelope model created in Models/SyncEnvelope.cs with Version (string, default '1'), LastSyncedUtc (DateTime), and Entries (List<DiaryEntry>)",
+        "Existing app behavior is unchanged — no compile errors from new fields",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Update DiaryService for soft deletes and change tracking",
+      "description": "As a developer, I need the diary service to use soft deletes, track modification times, and fire change events so the sync engine can operate correctly.",
+      "acceptanceCriteria": [
+        "IDiaryService interface adds: GetAllIncludingDeletedAsync(), ReplaceAllAsync(List<DiaryEntry>), and event Action? OnDataChanged",
+        "GetAllAsync() filters out entries where IsDeleted == true",
+        "GetAllAsync() on first call backfills LastModified from Timestamp.ToUniversalTime() for entries where LastModified == default(DateTime) (migration of pre-existing data)",
+        "AddAsync() sets LastModified = DateTime.UtcNow before saving and fires OnDataChanged",
+        "UpdateAsync() sets LastModified = DateTime.UtcNow before saving and fires OnDataChanged",
+        "DeleteAsync() sets IsDeleted = true and LastModified = DateTime.UtcNow instead of removing the entry, and fires OnDataChanged",
+        "GetAllIncludingDeletedAsync() returns all entries without filtering",
+        "ReplaceAllAsync() overwrites the full LocalStorage 'diary-entries' key",
+        "Existing UI pages still work correctly — soft-deleted entries are invisible",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Google Auth JavaScript interop module",
+      "description": "As a developer, I need a JavaScript module that handles Google Identity Services OAuth so Blazor can authenticate users for Drive access.",
+      "acceptanceCriteria": [
+        "File wwwroot/js/google-auth.js created",
+        "JS module dynamically loads Google Identity Services library from accounts.google.com/gsi/client",
+        "Exposes window.googleAuth.initialize(clientId) that creates a TokenClient with scope 'https://www.googleapis.com/auth/drive.appdata'",
+        "Exposes window.googleAuth.signIn() that returns a Promise resolving to an access token string",
+        "Exposes window.googleAuth.signOut() that revokes the token",
+        "Exposes window.googleAuth.getAccessToken() that returns the current token or null",
+        "Exposes window.googleAuth.isSignedIn() that returns a boolean",
+        "Access token is stored in JS module-scoped variable only, not in localStorage",
+        "Client ID 101133685796-p43f4uqejgt9lgce4lvibrnoam8oegb1.apps.googleusercontent.com is used",
+        "Script tag added to wwwroot/index.html: <script src='js/google-auth.js'></script>",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "C# Google Auth service wrapping JS interop",
+      "description": "As a developer, I need a C# service that wraps the Google Auth JS module so other services can authenticate without touching JavaScript directly.",
+      "acceptanceCriteria": [
+        "IGoogleAuthService interface created in Services/ with methods: InitializeAsync(), SignInAsync() returning Task<string?>, SignOutAsync(), IsSignedInAsync() returning Task<bool>, GetAccessTokenAsync() returning Task<string?>",
+        "GoogleAuthService implementation uses IJSRuntime to call the JS google-auth module functions",
+        "InitializeAsync() calls window.googleAuth.initialize with the hardcoded client ID",
+        "Service registered as scoped in Program.cs",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Google Drive API service for sync file operations",
+      "description": "As a developer, I need a service that reads and writes the sync JSON file to Google Drive's appDataFolder.",
+      "acceptanceCriteria": [
+        "IGoogleDriveService interface created with: FindSyncFileAsync() returning (string? fileId, string? version), DownloadSyncFileAsync(string fileId) returning SyncEnvelope?, UploadSyncFileAsync(SyncEnvelope envelope, string? existingFileId, string? version) returning (string fileId, string version)",
+        "GoogleDriveService uses HttpClient with Bearer token from IGoogleAuthService",
+        "FindSyncFileAsync queries GET /drive/v3/files?spaces=appDataFolder&q=name='turdtracker-sync.json'&fields=files(id,version)",
+        "DownloadSyncFileAsync calls GET /drive/v3/files/{fileId}?alt=media and deserializes JSON to SyncEnvelope",
+        "UploadSyncFileAsync creates new file (multipart POST to /upload/drive/v3/files?uploadType=multipart with parents=['appDataFolder']) or updates existing (PATCH) with If-Match header for concurrency",
+        "Service registered as scoped in Program.cs",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Merge engine with additive merge and conflict resolution",
+      "description": "As a developer, I need a merge engine that combines local and remote entry lists additively, resolving conflicts by latest timestamp.",
+      "acceptanceCriteria": [
+        "Static MergeEngine class (or static method on SyncService) with method: Merge(List<DiaryEntry> local, List<DiaryEntry> remote) returning MergeResult",
+        "MergeResult contains: List<DiaryEntry> MergedEntries, bool LocalChanged, bool RemoteChanged",
+        "Entries only in local set are kept in merged result",
+        "Entries only in remote set are kept in merged result",
+        "Entries in both sets: the one with later LastModified (UTC) wins",
+        "Soft-deleted entries (IsDeleted=true) are included in merged result",
+        "Tombstones older than 90 days (IsDeleted=true and LastModified < 90 days ago) are purged",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Sync orchestrator service with auto-sync and debounce",
+      "description": "As a user, I want my diary to sync automatically when I make changes and when the app starts, so all my devices stay up to date.",
+      "acceptanceCriteria": [
+        "ISyncService interface with: SyncAsync(), SyncStatus property (enum: NotSignedIn, Idle, Syncing, Synced, Error), LastSyncedUtc property, event Action? OnSyncStatusChanged, InitializeAsync()",
+        "SyncService implementation orchestrates: check auth -> download remote -> merge -> save local if changed -> upload if changed",
+        "On 412 Precondition Failed from upload, re-downloads, re-merges, and retries up to 3 times",
+        "Subscribes to DiaryService.OnDataChanged and triggers SyncAsync with 2-second debounce via CancellationTokenSource",
+        "InitializeAsync triggers sync on app startup if user is signed in",
+        "Sync skips silently when offline (catch HttpRequestException or check navigator.onLine)",
+        "If Drive API returns 401, attempts silent re-auth via GoogleAuthService.SignInAsync before setting Error status",
+        "SyncStatus and LastSyncedUtc update correctly and fire OnSyncStatusChanged on every transition",
+        "Service registered as scoped in Program.cs",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Sync status indicator icon in app bar",
+      "description": "As a user, I want to see the current sync status at a glance in the app bar so I know whether my data is up to date.",
+      "acceptanceCriteria": [
+        "Sync icon button added to MainLayout.razor app bar between MudSpacer and theme toggle button",
+        "Synced state shows green CloudDone icon",
+        "Syncing state shows CloudSync icon (optionally with CSS rotation animation)",
+        "Error state shows red CloudOff icon; clicking shows a MudSnackbar with error details",
+        "NotSignedIn state shows grey CloudOff icon",
+        "Hovering or tapping the sync icon shows a MudTooltip with the last synced timestamp (or 'Not synced' if never)",
+        "Icon updates reactively when SyncService.OnSyncStatusChanged fires (calls StateHasChanged)",
+        "On firstRender in MainLayout, calls SyncService.InitializeAsync() to trigger startup sync",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Google Drive sync section on Settings page",
+      "description": "As a user, I want to manage my Google Drive connection from Settings so I can sign in, see sync status, manually sync, and sign out.",
+      "acceptanceCriteria": [
+        "New 'Google Drive Sync' MudPaper section on Settings page between Appearance and Data sections",
+        "When not signed in: shows 'Sign in with Google' MudButton with Google icon",
+        "Clicking sign-in initiates GoogleAuthService.SignInAsync() then triggers SyncService.SyncAsync()",
+        "When signed in: shows sync status text, last sync time, 'Sync Now' MudButton, and 'Sign Out' MudButton",
+        "Sync Now button triggers SyncService.SyncAsync() and shows syncing state",
+        "Sign Out button calls GoogleAuthService.SignOutAsync() and updates UI to signed-out state",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "First-visit sync onboarding banner on Home page",
+      "description": "As a new user, I want to be prompted to connect Google Drive on my first visit so I discover the sync feature early.",
+      "acceptanceCriteria": [
+        "On first app load (no prior sign-in and no dismiss flag), a MudAlert banner appears at the top of the Home page",
+        "Banner text explains the benefit of syncing (e.g., 'Sync your diary across devices with Google Drive')",
+        "Banner has a 'Connect Google Drive' action button that initiates sign-in flow",
+        "Banner has a dismiss/close option",
+        "Dismissing saves a flag to LocalStorage (e.g., 'sync-banner-dismissed') so it does not reappear",
+        "Banner does not appear if user is already signed in",
+        "Banner does not block any app functionality",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

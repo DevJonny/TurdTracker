@@ -1,0 +1,175 @@
+## Codebase Patterns
+- Build command: `DOTNET_CLI_USE_MSBUILD_SERVER=0 DOTNET_HOST_PATH=$(which dotnet) dotnet build` (required on macOS ARM64 to avoid task host error)
+- `wasm-tools` workload must be installed (`dotnet workload install wasm-tools`) — without it, ComputeWasmBuildAssets fails with MSB4216
+- Build with sandbox disabled for NuGet restore (network access required)
+- Project source lives in `src/TurdTracker/`
+- MudBlazor v9.2.0 configured with providers in MainLayout.razor
+- Blazored.LocalStorage v4.5.0 (must specify version explicitly; latest search fails on .NET 10)
+- Folder structure: Pages/, Components/, Models/, Services/ under src/TurdTracker/
+- MudBlazor CSS/JS referenced in wwwroot/index.html
+- Build from repo root: `DOTNET_CLI_USE_MSBUILD_SERVER=0 dotnet build src/TurdTracker/TurdTracker.csproj`
+- DiaryService uses LocalStorage key "diary-entries"
+- DI registration pattern: `builder.Services.AddScoped<IService, Service>()` in Program.cs
+- SyncService subscribes to `DiaryService.OnDataChanged` with 2-second debounce; temporarily unsubscribes during `ReplaceAllAsync` to avoid sync loops
+- SyncService handles 412 (re-download + re-merge + retry up to 3x) and 401 (silent re-auth) automatically
+- Inject `ISyncService` for sync operations; call `InitializeAsync()` on app startup
+- Page injection pattern: `@using TurdTracker.Services` + `@inject IDiaryService DiaryService`
+- `_Imports.razor` has global `@using TurdTracker.Services` — no per-page using needed
+- MudBlazor v9 MUD0002 warning: avoid HTML attributes like `Title` on MudBlazor components; use MudBlazor-specific props
+- Client ID for Google OAuth: 101133685796-p43f4uqejgt9lgce4lvibrnoam8oegb1.apps.googleusercontent.com
+- DiaryService internal reads use private `GetAllRawAsync()` (unfiltered); public `GetAllAsync()` filters soft-deleted entries
+- `OnDataChanged` event pattern: fire after `SaveAsync()` in mutating methods (Add, Update, Delete)
+- JS interop files live in `wwwroot/js/`; call from C# via `IJSRuntime.InvokeAsync("googleAuth.method", args)` (no `window.` prefix)
+- GoogleAuthService wraps JS interop; inject `IGoogleAuthService` for auth operations
+- GoogleDriveService uses HttpClient with Bearer token; inject `IGoogleDriveService` for Drive file operations
+- Google Drive API: files endpoint at `https://www.googleapis.com/drive/v3/files`, upload at `https://www.googleapis.com/upload/drive/v3/files`
+- Sync file name: `turdtracker-sync.json` stored in `appDataFolder` space
+- MergeEngine is static — call `MergeEngine.Merge(local, remote)` and check `MergeResult.LocalChanged`/`RemoteChanged` to decide what to save/upload
+- MainLayout.razor: sync icon is between MudSpacer and theme toggle; uses `@implements IDisposable` to clean up event subscriptions
+- Use `InvokeAsync(StateHasChanged)` when handling events from services (not on Blazor sync context)
+- MudBlazor v9.2.0 does not have `Icons.Material.Filled.Google` — use `Icons.Material.Filled.Cloud` as alternative
+
+---
+
+## 2026-03-24 - US-001
+- Added `DateTime LastModified` (default `DateTime.UtcNow`) and `bool IsDeleted` (default `false`) properties to `DiaryEntry` model
+- Created `Models/SyncEnvelope.cs` with `Version`, `LastSyncedUtc`, and `Entries` properties
+- Files changed: `src/TurdTracker/Models/DiaryEntry.cs`, `src/TurdTracker/Models/SyncEnvelope.cs`
+- **Learnings for future iterations:**
+  - DiaryEntry uses `DateTime.Now` for Timestamp but `DateTime.UtcNow` for LastModified — be aware of this difference when comparing times
+  - Build passes cleanly; new fields with defaults don't break existing LocalStorage deserialization (System.Text.Json ignores missing properties)
+---
+
+## 2026-03-24 - US-002
+- Updated `IDiaryService` interface with `GetAllIncludingDeletedAsync()`, `ReplaceAllAsync(List<DiaryEntry>)`, and `event Action? OnDataChanged`
+- `GetAllAsync()` now filters out soft-deleted entries (`IsDeleted == true`)
+- `GetAllAsync()` backfills `LastModified` from `Timestamp.ToUniversalTime()` for pre-existing entries where `LastModified == default(DateTime)` on first call (migration)
+- `AddAsync()` and `UpdateAsync()` set `LastModified = DateTime.UtcNow` and fire `OnDataChanged`
+- `DeleteAsync()` now soft-deletes (sets `IsDeleted = true`, `LastModified = DateTime.UtcNow`) instead of removing entries, and fires `OnDataChanged`
+- `GetAllIncludingDeletedAsync()` returns all entries without filtering
+- `ReplaceAllAsync()` overwrites the full LocalStorage key
+- Files changed: `src/TurdTracker/Services/IDiaryService.cs`, `src/TurdTracker/Services/DiaryService.cs`
+- **Learnings for future iterations:**
+  - DiaryService uses a `_hasMigrated` flag to avoid repeated backfill checks — this is a scoped service so the flag resets per session
+  - `GetAllRawAsync()` is the private unfiltered read; `GetAllAsync()` filters deleted; `GetAllIncludingDeletedAsync()` is the public unfiltered read
+  - Existing pages (Home, Calendar, Stats, Export) use `GetAllAsync()` so soft-deleted entries are automatically invisible without page changes
+  - EntryDetail page calls `DeleteAsync(Id)` which now soft-deletes — no page changes needed
+---
+
+## 2026-03-24 - US-003
+- Created `wwwroot/js/google-auth.js` — JavaScript module for Google Identity Services OAuth
+- Module dynamically loads GIS library, exposes `initialize`, `signIn`, `signOut`, `getAccessToken`, `isSignedIn` on `window.googleAuth`
+- Access token stored in module-scoped closure variable (not localStorage)
+- Added `<script src="js/google-auth.js"></script>` to `wwwroot/index.html`
+- Files changed: `src/TurdTracker/wwwroot/js/google-auth.js` (new), `src/TurdTracker/wwwroot/index.html`
+- **Learnings for future iterations:**
+  - JS interop files go in `wwwroot/js/` directory
+  - Google Identity Services uses `google.accounts.oauth2.initTokenClient()` for token-based auth (no session cookies)
+  - Script tag placed before `blazor.webassembly` script so it's available when Blazor initializes
+  - C# interop will call these via `IJSRuntime.InvokeAsync("googleAuth.methodName", args)`
+---
+
+## 2026-03-24 - US-004
+- Created `IGoogleAuthService` interface with `InitializeAsync()`, `SignInAsync()`, `SignOutAsync()`, `IsSignedInAsync()`, `GetAccessTokenAsync()`
+- Created `GoogleAuthService` implementation using `IJSRuntime` to call `window.googleAuth.*` JS functions
+- Registered as scoped service in `Program.cs`
+- Files changed: `src/TurdTracker/Services/IGoogleAuthService.cs` (new), `src/TurdTracker/Services/GoogleAuthService.cs` (new), `src/TurdTracker/Program.cs`
+- **Learnings for future iterations:**
+  - JS interop calls use `"googleAuth.methodName"` format (no `window.` prefix needed in `InvokeAsync`)
+  - `InvokeAsync<T>` for return values, `InvokeVoidAsync` for void JS functions
+  - Service follows same scoped DI pattern as DiaryService and ThemeService
+---
+
+## 2026-03-24 - US-005
+- Created `IGoogleDriveService` interface with `FindSyncFileAsync()`, `DownloadSyncFileAsync()`, `UploadSyncFileAsync()` using tuple return types
+- Created `GoogleDriveService` implementation using `HttpClient` with Bearer token from `IGoogleAuthService`
+- `FindSyncFileAsync` queries Drive files API with `spaces=appDataFolder` filter
+- `DownloadSyncFileAsync` uses `alt=media` to download and deserialize to `SyncEnvelope`
+- `UploadSyncFileAsync` creates (multipart POST) or updates (PATCH) with `If-Match` for concurrency control
+- Registered as scoped service in `Program.cs`
+- Files changed: `src/TurdTracker/Services/IGoogleDriveService.cs` (new), `src/TurdTracker/Services/GoogleDriveService.cs` (new), `src/TurdTracker/Program.cs`
+- **Learnings for future iterations:**
+  - Google Drive multipart upload uses `MultipartContent("related")` with metadata JSON part + file content part
+  - For updates, use PATCH with `uploadType=media`; for creates, use POST with `uploadType=multipart` (needs metadata with parents)
+  - `If-Match` header with version string enables optimistic concurrency — 412 response means conflict
+  - `fields=id,version` parameter limits response to needed fields
+  - HttpClient auth header set via `DefaultRequestHeaders.Authorization` before each call
+---
+
+## 2026-03-24 - US-006
+- Created static `MergeEngine` class in `Services/MergeEngine.cs` with `Merge(List<DiaryEntry> local, List<DiaryEntry> remote)` method
+- Created `MergeResult` class with `MergedEntries`, `LocalChanged`, `RemoteChanged` properties
+- Additive merge: entries only in local or only in remote are kept; entries in both resolved by latest `LastModified` (UTC)
+- Soft-deleted entries included in merged result; tombstones older than 90 days are purged
+- `LocalChanged` set true when remote has newer or unique entries; `RemoteChanged` set true when local has newer or unique entries
+- Files changed: `src/TurdTracker/Services/MergeEngine.cs` (new)
+- **Learnings for future iterations:**
+  - MergeEngine is a static utility class — no DI registration needed
+  - `LocalChanged` indicates the local store needs updating; `RemoteChanged` indicates remote (Drive) needs uploading
+  - Tombstone purge uses `DateTime.UtcNow` comparison, consistent with `LastModified` being stored as UTC
+  - When entries tie on `LastModified`, local wins (>= comparison) — this avoids unnecessary remote uploads for identical data
+---
+
+## 2026-03-24 - US-007
+- Created `ISyncService` interface with `SyncAsync()`, `SyncStatus` property (enum: NotSignedIn, Idle, Syncing, Synced, Error), `LastSyncedUtc`, `OnSyncStatusChanged` event, `InitializeAsync()`
+- Created `SyncService` implementation orchestrating: check auth → download remote → merge → save local if changed → upload if changed
+- Handles 412 Precondition Failed with re-download, re-merge, retry (up to 3 attempts)
+- Subscribes to `DiaryService.OnDataChanged` with 2-second debounce via `CancellationTokenSource`
+- `InitializeAsync()` triggers sync on startup if user is signed in
+- Silently skips sync when offline (`HttpRequestException` caught)
+- On 401, attempts silent re-auth via `SignInAsync()` before setting Error status
+- Temporarily unsubscribes from `OnDataChanged` during `ReplaceAllAsync` to prevent sync loops
+- Implements `IDisposable` to clean up event subscription and debounce CTS
+- Registered as scoped in `Program.cs`
+- Files changed: `src/TurdTracker/Services/ISyncService.cs` (new), `src/TurdTracker/Services/SyncService.cs` (new), `src/TurdTracker/Program.cs`
+- **Learnings for future iterations:**
+  - When writing merged data back to local storage, unsubscribe from `OnDataChanged` first to avoid infinite sync loops
+  - `Task.Run` with `Task.Delay` + `CancellationTokenSource` is the pattern for debouncing in Blazor WASM (no `System.Timers.Timer` needed)
+  - SyncService implements `IDisposable` — Blazor's DI container disposes scoped services automatically
+  - Check `SyncStatus == Syncing` at start of `SyncAsync()` to prevent concurrent sync operations
+---
+
+## 2026-03-24 - US-008
+- Added sync status indicator icon to MainLayout.razor app bar, between MudSpacer and theme toggle
+- Icon reflects SyncStatus: CloudDone (green) for Synced/Idle, CloudSync for Syncing, CloudOff (red) for Error, CloudOff (grey) for NotSignedIn
+- MudTooltip shows status text and last synced timestamp
+- Clicking Error icon shows MudSnackbar with error details
+- Subscribes to `SyncService.OnSyncStatusChanged` and calls `StateHasChanged` reactively via `InvokeAsync`
+- Calls `SyncService.InitializeAsync()` on firstRender to trigger startup sync
+- Implements `IDisposable` to unsubscribe from event
+- Files changed: `src/TurdTracker/Layout/MainLayout.razor`, `src/TurdTracker/Layout/MainLayout.razor.css`
+- **Learnings for future iterations:**
+  - Use `InvokeAsync(StateHasChanged)` when updating UI from external event handlers (not on Blazor's sync context)
+  - `ISnackbar` is injected via `@inject ISnackbar Snackbar` — MudBlazor provides it through `MudSnackbarProvider` in layout
+  - MainLayout implements `IDisposable` via `@implements IDisposable` directive — always unsubscribe from events in `Dispose()`
+  - Sync icon placement: between `MudSpacer` and theme toggle button in the app bar
+---
+
+## 2026-03-24 - US-009
+- Added "Google Drive Sync" MudPaper section to Settings page between Appearance and Data sections
+- When not signed in: shows "Sign in with Google" button with Cloud icon (MudBlazor v9 lacks Google icon)
+- When signed in: shows sync status icon/text, last sync time, "Sync Now" button, and "Sign Out" button
+- Sign-in calls `GoogleAuthService.SignInAsync()` then `SyncService.SyncAsync()`
+- Sign-out calls `GoogleAuthService.SignOutAsync()` and resets UI state
+- Sync Now button disabled while syncing; triggers `SyncService.SyncAsync()`
+- Subscribes to `SyncService.OnSyncStatusChanged` for reactive UI updates; implements `IDisposable`
+- Files changed: `src/TurdTracker/Pages/Settings.razor`
+- **Learnings for future iterations:**
+  - MudBlazor v9.2.0 does not have `Icons.Material.Filled.Google` — use `Cloud` or a custom SVG icon instead
+  - Settings page follows same `@implements IDisposable` + event subscription pattern as MainLayout
+  - Check `IsSignedInAsync()` on firstRender to determine initial signed-in state for conditional UI
+---
+
+## 2026-03-24 - US-010
+- Added first-visit sync onboarding banner to Home page using MudAlert with Severity.Info
+- Banner shows at top of page when user is not signed in and hasn't dismissed it
+- "Connect Google Drive" button initiates sign-in flow via GoogleAuthService then triggers sync
+- Dismiss (close icon) saves `sync-banner-dismissed` flag to LocalStorage so it won't reappear
+- Banner hidden if user is already signed in (checked via `IsSignedInAsync()` on firstRender)
+- Banner does not block any existing functionality — diary entries load independently
+- Files changed: `src/TurdTracker/Pages/Home.razor`
+- **Learnings for future iterations:**
+  - `MudAlert` with `ShowCloseIcon="true"` and `CloseIconClicked` callback provides built-in dismiss UX
+  - `Blazored.LocalStorage` `GetItemAsync<bool>` returns `false` for missing keys — no need to handle null for boolean flags
+  - Banner visibility check in `OnAfterRenderAsync(firstRender)` avoids prerendering issues with JS interop (LocalStorage + GoogleAuth both need JS)
+---
