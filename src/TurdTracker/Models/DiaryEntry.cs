@@ -7,6 +7,6 @@ public class DiaryEntry
     public int BristolType { get; set; }
     public string Notes { get; set; } = string.Empty;
     public List<string> Tags { get; set; } = [];
-    public DateTime LastModified { get; set; } = DateTime.UtcNow;
+    public DateTime LastModified { get; set; }
     public bool IsDeleted { get; set; } = false;
 }
