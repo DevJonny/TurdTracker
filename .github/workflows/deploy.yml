@@ -37,9 +37,6 @@ jobs:
       - name: Add .nojekyll
         run: touch release/wwwroot/.nojekyll
 
-      - name: Copy index.html to 404.html for SPA routing
-        run: cp release/wwwroot/index.html release/wwwroot/404.html
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
