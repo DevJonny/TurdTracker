@@ -154,7 +154,8 @@
     {
         if (SyncService.SyncStatus == SyncStatus.Error)
         {
-            Snackbar.Add("Sync failed. Check your connection and try again from Settings.", Severity.Error);
+            var message = SyncService.LastError ?? "Sync failed. Check your connection and try again from Settings.";
+            Snackbar.Add(message, Severity.Error);
         }
     }
 

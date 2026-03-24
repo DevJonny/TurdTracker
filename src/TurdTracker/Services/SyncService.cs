@@ -13,6 +13,7 @@ public class SyncService : ISyncService, IDisposable
     private const int MaxRetries = 3;
 
     public SyncStatus SyncStatus { get; private set; } = SyncStatus.NotSignedIn;
+    public string? LastError { get; private set; }
     public DateTime? LastSyncedUtc { get; private set; }
     public event Action? OnSyncStatusChanged;
 
@@ -60,6 +61,8 @@ public class SyncService : ISyncService, IDisposable
         if (SyncStatus == SyncStatus.Syncing)
             return;
 
+        LastError = null;
+
         if (!await _authService.IsSignedInAsync())
         {
             SetStatus(SyncStatus.NotSignedIn);
@@ -79,13 +82,15 @@ public class SyncService : ISyncService, IDisposable
             // Offline / network failure — skip silently, revert to previous good state
             SetStatus(LastSyncedUtc.HasValue ? SyncStatus.Synced : SyncStatus.Idle);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
             // Real HTTP error (403, 429, 500, etc.) — surface as error
+            LastError = ex.Message;
             SetStatus(SyncStatus.Error);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            LastError = ex.Message;
             SetStatus(SyncStatus.Error);
         }
     }
