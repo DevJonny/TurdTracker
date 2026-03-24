@@ -137,8 +137,14 @@ public class SyncService : ISyncService, IDisposable
         {
             // Temporarily unsubscribe to avoid triggering a sync loop
             _diaryService.OnDataChanged -= OnDataChanged;
-            await _diaryService.ReplaceAllAsync(result.MergedEntries);
-            _diaryService.OnDataChanged += OnDataChanged;
+            try
+            {
+                await _diaryService.ReplaceAllAsync(result.MergedEntries);
+            }
+            finally
+            {
+                _diaryService.OnDataChanged += OnDataChanged;
+            }
         }
 
         // 5. Upload if changed
