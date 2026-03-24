@@ -7,4 +7,6 @@ public interface IGoogleAuthService
     Task SignOutAsync();
     Task<bool> IsSignedInAsync();
     Task<string?> GetAccessTokenAsync();
+    Task<bool> TrySilentSignInAsync();
+    Task<bool> HasPreviousSessionAsync();
 }
