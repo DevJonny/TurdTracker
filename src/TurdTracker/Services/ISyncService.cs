@@ -13,6 +13,7 @@ public interface ISyncService
 {
     Task SyncAsync();
     SyncStatus SyncStatus { get; }
+    string? LastError { get; }
     DateTime? LastSyncedUtc { get; }
     event Action? OnSyncStatusChanged;
     Task InitializeAsync();
