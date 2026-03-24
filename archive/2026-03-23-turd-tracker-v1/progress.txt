@@ -1,0 +1,236 @@
+## Codebase Patterns
+- Build command: `DOTNET_CLI_USE_MSBUILD_SERVER=0 DOTNET_HOST_PATH=$(which dotnet) dotnet build` (required on macOS ARM64 to avoid task host error)
+- `wasm-tools` workload must be installed (`dotnet workload install wasm-tools`) — without it, ComputeWasmBuildAssets fails with MSB4216
+- Build with sandbox disabled for NuGet restore (network access required)
+- Project source lives in `src/TurdTracker/`
+- MudBlazor v9.2.0 configured with providers in MainLayout.razor
+- Blazored.LocalStorage v4.5.0 (must specify version explicitly; latest search fails on .NET 10)
+- Folder structure: Pages/, Components/, Models/, Services/ under src/TurdTracker/
+- MudBlazor CSS/JS referenced in wwwroot/index.html
+- Bootstrap CSS removed from index.html (MudBlazor replaces it)
+- Build from repo root: `DOTNET_CLI_USE_MSBUILD_SERVER=0 dotnet build src/TurdTracker/TurdTracker.csproj`
+- DiaryService uses LocalStorage key "diary-entries"
+- DI registration pattern: `builder.Services.AddScoped<IService, Service>()` in Program.cs
+- Page injection pattern: `@using TurdTracker.Services` + `@inject IDiaryService DiaryService`
+- MudDatePicker binds to `DateTime?`, MudTimePicker binds to `TimeSpan?`
+- Two-way binding for custom components: `@bind-Foo` requires `Foo` parameter + `FooChanged` EventCallback
+- MudChip `OnClose` renders a removable chip; `OnClick` makes a clickable chip
+- MudBlazor v9: use `ShowMessageBoxAsync` (not `ShowMessageBox`) on `IDialogService` for confirmation dialogs
+- Navigation layout: MudDrawer + MudNavMenu for desktop side nav; custom bottom nav with MudToolBar for mobile
+- Responsive breakpoint: 960px (mobile below, desktop above) using CSS media queries with `.desktop-only` / `.mobile-only` classes
+- FAB bottom position should be 80px (not 24px) to clear the mobile bottom nav bar
+- Group entries by date: `DateOnly.FromDateTime(e.Timestamp)` with Dictionary for O(1) lookup
+- Monday-first calendar offset: `((int)dayOfWeek + 6) % 7`
+- ThemeService uses LocalStorage key "theme-dark-mode" for dark/light mode persistence
+- MudThemeProvider `@bind-IsDarkMode` + `Theme` prop controls dark/light mode switching
+- MudBlazor v9 MUD0002 warning: avoid HTML attributes like `Title` on MudBlazor components; use MudBlazor-specific props
+- `_Imports.razor` has global `@using TurdTracker.Services` — no per-page using needed
+- MudBlazor v9 charts: `MudChart<double>`, `ChartSeries<double>`, `BarChartOptions` (concrete, not `ChartOptions`). Labels prop is `ChartLabels`. Need `@using MudBlazor.Charts` and `@using TurdTracker.Models`.
+- MudBlazor v9: Donut/Pie chart `InputData`/`InputLabels` props trigger MUD0002 warnings — prefer Bar chart with `ChartSeries` API for all chart types.
+- PDF export: use `window.print()` via JS interop with `@media print` CSS to hide app chrome and show print-only content
+
+---
+
+## 2026-03-23 - US-001
+- Scaffolded Blazor WASM standalone project targeting .NET 10 with PWA template
+- Installed and configured MudBlazor (v9.2.0) and Blazored.LocalStorage (v4.5.0) in Program.cs
+- Created folder structure: Pages/, Components/, Models/, Services/
+- Configured MudThemeProvider, MudPopoverProvider, MudDialogProvider, MudSnackbarProvider in MainLayout.razor
+- Added MudBlazor CSS/JS to index.html, removed bootstrap CSS reference
+- Files changed: Program.cs, _Imports.razor, MainLayout.razor, index.html, TurdTracker.csproj, .gitkeep files
+- **Learnings for future iterations:**
+  - `dotnet build` fails on macOS ARM64 with MSB4216 error; must set `DOTNET_CLI_USE_MSBUILD_SERVER=0`
+  - Blazored.LocalStorage v4.5.0 must be pinned explicitly; the latest version search returns empty on .NET 10
+  - NuGet package install requires sandbox disabled for network access
+---
+
+## 2026-03-23 - US-002
+- Created DiaryEntry model in Models/DiaryEntry.cs with Id, Timestamp, BristolType, Notes, Tags
+- Created IDiaryService interface in Services/IDiaryService.cs
+- Created DiaryService implementation in Services/DiaryService.cs using Blazored.LocalStorage
+- Registered IDiaryService/DiaryService as scoped in Program.cs DI container
+- Files changed: Models/DiaryEntry.cs, Services/IDiaryService.cs, Services/DiaryService.cs, Program.cs
+- **Learnings for future iterations:**
+  - Must specify full path to csproj when building from repo root: `dotnet build src/TurdTracker/TurdTracker.csproj`
+  - LocalStorage key is "diary-entries" for all diary entry persistence
+---
+
+## 2026-03-23 - US-003
+- Created BristolScaleSelector component in Components/ with all 7 Bristol Stool Scale types
+- Each type displays type number, name, description, and placeholder SVG image
+- Created 7 placeholder SVG images in wwwroot/images/ (bristol-1.svg through bristol-7.svg)
+- Selected type highlighted with primary color border and hover background
+- Component exposes SelectedType parameter with EventCallback<int> for two-way binding
+- Added @using TurdTracker.Components to _Imports.razor
+- CSS scoped styles in BristolScaleSelector.razor.css
+- Files changed: Components/BristolScaleSelector.razor, Components/BristolScaleSelector.razor.css, wwwroot/images/bristol-*.svg, _Imports.razor
+- **Learnings for future iterations:**
+  - `wasm-tools` workload must be installed for builds to succeed — prior builds happened to work without it but adding new static content triggered the ComputeWasmBuildAssets task
+  - MudBlazor scoped CSS requires `::deep` prefix to target child elements within component markup
+  - Two-way binding convention in Blazor: parameter `Foo` + `FooChanged` EventCallback
+---
+
+## 2026-03-23 - US-004
+- Created Log page at /log route with date/time auto-populated to current date/time
+- Integrated BristolScaleSelector component with validation (required before save)
+- Added optional notes field and Save/Cancel buttons
+- Save calls DiaryService.AddAsync and navigates to diary list (/)
+- Files changed: Pages/Log.razor
+- **Learnings for future iterations:**
+  - MudDatePicker uses `DateTime?` and MudTimePicker uses `TimeSpan?` for binding
+  - Combine date and time with `_date.Value.Date + _time.Value` to create the full timestamp
+  - Use `@using TurdTracker.Services` and `@inject` for service access in pages
+---
+
+## 2026-03-23 - US-005
+- Created TagInput component in Components/TagInput.razor
+- User can type a tag and press Enter (or click add icon) to add it
+- Tags display as removable MudChip components with primary color
+- Recent/common tags loaded from existing diary entries via DiaryService, shown as outlined quick-select chips
+- Multiple tags supported, duplicates prevented (case-insensitive)
+- Integrated TagInput into Log.razor form page between notes field and action buttons
+- Tags passed to DiaryEntry on save; tags are optional
+- Files changed: Components/TagInput.razor, Pages/Log.razor
+- **Learnings for future iterations:**
+  - MudChip `OnClose` callback makes the chip removable with an X button
+  - MudChip `OnClick` makes the chip clickable for selection
+  - Use `StringComparer.OrdinalIgnoreCase` for case-insensitive tag deduplication
+---
+
+## 2026-03-23 - US-006
+- Replaced default Home.razor with diary list view at / route
+- Entries displayed in reverse chronological order (newest first)
+- Each entry shows date/time, Bristol type number in avatar, tags as chips, truncated notes
+- Tapping an entry navigates to /entry/{id} detail view
+- Empty state with icon, message, and "Log Entry" button when no entries exist
+- FAB (floating action button) fixed at bottom-right to navigate to /log
+- Files changed: Pages/Home.razor
+- **Learnings for future iterations:**
+  - MudFab with fixed position for FAB: `Style="position: fixed; bottom: 24px; right: 24px;"`
+  - MudAvatar works well as a Bristol type indicator badge
+  - `ml-13` class aligns tags below the text content (past the avatar)
+---
+
+## 2026-03-23 - US-007
+- Created EntryDetail page at /entry/{id} route showing all entry fields (date/time, Bristol type, notes, tags)
+- View mode shows entry details with edit and delete icon buttons in header
+- Edit mode reuses same form pattern as Log page (date/time pickers, BristolScaleSelector, notes, TagInput)
+- Delete shows MudBlazor confirmation dialog via ShowMessageBoxAsync, navigates to diary list on confirm
+- Entry not found state handled with error message and back button
+- Files changed: Pages/EntryDetail.razor
+- **Learnings for future iterations:**
+  - MudBlazor v9 uses `ShowMessageBoxAsync` not `ShowMessageBox` on IDialogService
+  - `DialogParameters<MudMessageBox>` is not needed for simple message box; just call ShowMessageBoxAsync directly
+  - Route parameter with type constraint: `@page "/entry/{Id:guid}"` and `[Parameter] public Guid Id { get; set; }`
+---
+
+## 2026-03-23 - US-008
+- Replaced default NavMenu/MainLayout with MudBlazor navigation components
+- MainLayout now uses MudAppBar, MudDrawer with MudNavMenu (desktop side nav), and bottom nav bar (mobile)
+- Navigation items: Diary (/), Calendar (/calendar), Stats (/stats), Settings (/settings)
+- Active page highlighted via Color.Primary on nav items
+- Responsive: bottom nav on mobile (<960px), side drawer on desktop (>=960px)
+- Created placeholder pages for Calendar, Stats, and Settings routes
+- Adjusted Home page FAB position from 24px to 80px bottom to clear mobile bottom nav
+- Files changed: Layout/MainLayout.razor, Layout/MainLayout.razor.css, Pages/Calendar.razor, Pages/Stats.razor, Pages/Settings.razor, Pages/Home.razor
+- **Learnings for future iterations:**
+  - Use CSS classes `.desktop-only` / `.mobile-only` with media queries at 960px breakpoint for responsive nav
+  - MudDrawer with MudNavMenu provides side navigation; MudNavLink with `Match` param handles active state
+  - `Navigation.ToBaseRelativePath(Navigation.Uri)` strips the base URL for route matching in code
+  - Old NavMenu.razor and NavMenu.razor.css are now unused but kept (could be cleaned up)
+---
+
+## 2026-03-23 - US-009
+- Implemented full calendar view at /calendar route replacing placeholder page
+- Monthly calendar grid with Mon-Sun columns, prev/next month navigation
+- Days with entries show count badge using MudBadge
+- Clicking a day shows entry list below calendar with Bristol type avatar, time, notes, tags
+- Current day highlighted with primary color border; selected day has tinted background
+- Entries grouped by DateOnly for efficient lookup
+- Scoped CSS for calendar grid layout using CSS Grid
+- Files changed: Pages/Calendar.razor, Pages/Calendar.razor.css (new)
+- **Learnings for future iterations:**
+  - `DateOnly.FromDateTime()` is useful for grouping entries by date
+  - Monday-first week: `((int)dayOfWeek + 6) % 7` converts Sunday=0 to Monday=0 offset
+  - MudBadge with `Content` prop and empty `<span>` child works for count indicators
+  - Scoped CSS in Blazor uses `::deep` for child elements; CSS Grid works well for calendar layouts
+---
+
+## 2026-03-23 - US-010
+- Implemented dark mode as default with light mode toggle
+- Created IThemeService/ThemeService for persisting theme preference in LocalStorage
+- Defined custom MudTheme with muted dark grey palette (Background #2d2d2d, Surface #363636)
+- MudThemeProvider in MainLayout uses @bind-IsDarkMode for reactive theme switching
+- Theme toggle icon button added to MudAppBar header (sun/moon icon)
+- Settings page updated with appearance section containing dark mode switch
+- Theme preference persists across sessions via LocalStorage key "theme-dark-mode"
+- Added @using TurdTracker.Services to _Imports.razor for global service access
+- Files changed: Services/IThemeService.cs (new), Services/ThemeService.cs (new), Program.cs, Layout/MainLayout.razor, Pages/Settings.razor, _Imports.razor
+- **Learnings for future iterations:**
+  - MudThemeProvider supports `@bind-IsDarkMode` for two-way dark mode binding
+  - PaletteDark uses muted greys (#2d2d2d, #363636) not pure black for better readability
+  - MudBlazor v9 MUD0002 analyzer warns about HTML attributes (like `Title`) on MudBlazor components
+  - Load theme preference in `OnAfterRenderAsync(firstRender)` since LocalStorage requires JS interop (not available in OnInitialized for WASM prerender)
+---
+
+## 2026-03-23 - US-011
+- Implemented frequency over time bar chart on /stats page
+- Selectable time range: last 7 days (daily), 30 days (daily with sparse labels), 90 days (weekly buckets)
+- Empty state message when no entries in selected range
+- Uses MudChart<double> with ChartType.Bar and BarChartOptions
+- Files changed: Pages/Stats.razor
+- **Learnings for future iterations:**
+  - MudBlazor v9 chart API: use `MudChart<double>` (generic), `ChartSeries<double>`, and `BarChartOptions` (not `ChartOptions` or `ChartSeries`)
+  - `DefaultAxisChartOptions` is abstract — use concrete types like `BarChartOptions` or `LineChartOptions`
+  - Chart labels property is `ChartLabels` not `XAxisLabels`
+  - Need `@using MudBlazor.Charts` for chart option types
+---
+
+## 2026-03-23 - US-012
+- Added Bristol type distribution bar chart to /stats page
+- Chart shows count per Bristol type (1-7) using bar chart with labels "Type 1" through "Type 7"
+- Empty state message when no entries exist
+- Files changed: Pages/Stats.razor
+- **Learnings for future iterations:**
+  - MudBlazor v9 Donut/Pie charts with `InputData`/`InputLabels` trigger MUD0002 analyzer warnings — use Bar chart with `ChartSeries` API instead
+  - Bar charts work well for distribution data and avoid the deprecated pie/donut API
+---
+
+## 2026-03-23 - US-013
+- Added time of day patterns bar chart to /stats page
+- Chart shows entry distribution by hour of day using 24-hour buckets (0-23)
+- Labels show every 3rd hour (00:00, 03:00, ..., 21:00) to avoid crowding
+- Empty state message when no entries exist
+- Files changed: Pages/Stats.razor
+- **Learnings for future iterations:**
+  - `entry.Timestamp.Hour` gives 0-23 int, perfect for bucketing into 24-hour array
+  - Sparse labels (every 3rd hour) keep the x-axis readable with 24 bars
+  - Same chart pattern as Bristol distribution: double[N] array, single ChartSeries, BarChartOptions with YAxisTicks=1
+---
+
+## 2026-03-23 - US-014
+- Created Export page at /export route with optional date range filter
+- Generates print-friendly HTML table with all entry details (date/time, Bristol type with name, tags, notes)
+- Uses window.print() via JS interop to trigger browser print/save-as-PDF dialog
+- Added print CSS in app.css: hides app chrome (nav, appbar, FAB), shows only the export table
+- Added "Export Diary to PDF" button in Settings page under new Data section
+- Files changed: Pages/Export.razor (new), Pages/Settings.razor, wwwroot/css/app.css
+- **Learnings for future iterations:**
+  - `window.print()` via `IJSRuntime.InvokeVoidAsync("window.print")` is the simplest PDF export for Blazor WASM — no NuGet packages needed
+  - Use `.print-only` / `.no-print` CSS classes with `@media print` to control what appears in the PDF
+  - `Task.Delay(100)` before print ensures Blazor re-render completes so the print-only content is in the DOM
+---
+
+## 2026-03-23 - US-015
+- Created custom SVG app icons (192px and 512px) with poo emoji theme in wwwroot/
+- Updated manifest.webmanifest: added descriptive name, dark theme background_color (#2d2d2d) and theme_color (#2d2d2d), SVG icon entries alongside existing PNGs
+- Added theme-color meta tag and apple-mobile-web-app meta tags to index.html
+- Updated service-worker.published.js to cache SVG files in addition to other static assets
+- Service worker (published version) already handles full offline caching of app shell
+- Files changed: wwwroot/icon-192.svg (new), wwwroot/icon-512.svg (new), wwwroot/manifest.webmanifest, wwwroot/index.html, wwwroot/service-worker.published.js
+- **Learnings for future iterations:**
+  - Build on macOS ARM64 needs both `DOTNET_CLI_USE_MSBUILD_SERVER=0` and `DOTNET_HOST_PATH=$(which dotnet)` — the latter resolves ComputeWasmBuildAssets task host errors
+  - Blazor PWA template already includes service-worker.published.js with full offline caching — no custom implementation needed
+  - SVG icons are well-supported in manifest.webmanifest with `type: "image/svg+xml"` and `purpose: "any"`
+  - Keep PNG icons as fallback alongside SVG for older browsers/devices
+---

@@ -1,0 +1,256 @@
+{
+  "project": "TurdTracker",
+  "branchName": "ralph/turd-tracker-v1",
+  "description": "Turd Tracker — A Blazor WASM PWA poo diary with Bristol Stool Scale, tags, calendar view, stats, and PDF export",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Project scaffolding and setup",
+      "description": "As a developer, I need to scaffold the Blazor WASM project with dependencies and folder structure so that all subsequent stories have a working foundation.",
+      "acceptanceCriteria": [
+        "Blazor WebAssembly standalone project created targeting .NET 10 with PWA template",
+        "MudBlazor NuGet package installed and configured in Program.cs",
+        "Blazored.LocalStorage NuGet package installed and configured in Program.cs",
+        "Folder structure created: Pages/, Components/, Models/, Services/",
+        "Project builds and runs successfully with dotnet run",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Build requires DOTNET_CLI_USE_MSBUILD_SERVER=0 on macOS ARM64"
+    },
+    {
+      "id": "US-002",
+      "title": "Data model and local storage service",
+      "description": "As a developer, I need a data model for diary entries and a service to persist them in local storage so that other features can store and retrieve data.",
+      "acceptanceCriteria": [
+        "DiaryEntry model class created with properties: Id (Guid), Timestamp (DateTime), BristolType (int 1-7), Notes (string), Tags (List<string>)",
+        "IDiaryService interface created with methods: GetAllAsync, GetByIdAsync, GetByDateAsync, AddAsync, UpdateAsync, DeleteAsync",
+        "DiaryService implementation uses Blazored.LocalStorage to persist entries",
+        "Service registered in DI container in Program.cs",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Bristol Stool Scale selector component",
+      "description": "As a user, I want to see the Bristol Stool Scale types with images and descriptions so that I can accurately classify my stool.",
+      "acceptanceCriteria": [
+        "BristolScaleSelector component created in Components/",
+        "All 7 Bristol Stool Scale types displayed with type number, name, and short description",
+        "Standard medical chart images included in wwwroot/images/ (or placeholder SVGs if not available)",
+        "Each type shows its image alongside the text",
+        "Selected type is visually highlighted with a distinct border or background",
+        "Only one type can be selected at a time",
+        "Component exposes a SelectedType parameter with EventCallback for two-way binding",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "wasm-tools workload must be installed for build to succeed on macOS ARM64"
+    },
+    {
+      "id": "US-004",
+      "title": "Log entry form page",
+      "description": "As a user, I want to quickly log a bowel movement with auto-populated date/time and Bristol type selection so that I can track my habits.",
+      "acceptanceCriteria": [
+        "New page at /log route",
+        "Date and time fields auto-populated to current date/time",
+        "Date and time can be manually adjusted",
+        "Bristol Stool Scale selector component integrated into the form",
+        "Bristol type selection is required before saving",
+        "Optional free-text notes field available",
+        "Save button calls DiaryService.AddAsync and navigates to diary list",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Tags input component",
+      "description": "As a user, I want to add optional tags to my entries so I can spot correlations later.",
+      "acceptanceCriteria": [
+        "TagInput component created in Components/",
+        "User can type a custom tag and press Enter to add it",
+        "Tags display as removable chips below the input",
+        "Common/recent tags shown as quick-select chips (pulled from existing entries via DiaryService)",
+        "Multiple tags can be added per entry",
+        "Component integrated into the log entry form page",
+        "Tags are optional — form can be saved without them",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Diary list view",
+      "description": "As a user, I want to see a chronological list of all my entries so I can review my history.",
+      "acceptanceCriteria": [
+        "Diary list page at / (index) route",
+        "Entries displayed in reverse chronological order (newest first)",
+        "Each entry shows: date/time, Bristol type number with icon/indicator, tags as chips, and truncated notes",
+        "Tapping an entry navigates to a detail view page (/entry/{id})",
+        "Empty state message shown when no entries exist",
+        "FAB or prominent button to navigate to /log",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Entry detail view with edit and delete",
+      "description": "As a user, I want to view, edit, and delete a diary entry so I can correct mistakes or remove test data.",
+      "acceptanceCriteria": [
+        "Detail page at /entry/{id} route showing all entry fields",
+        "Edit button toggles fields to editable mode (date/time, Bristol type, notes, tags)",
+        "Save button persists changes via DiaryService.UpdateAsync",
+        "Delete button shows MudBlazor confirmation dialog before deleting",
+        "After delete, navigates back to diary list",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Main navigation layout",
+      "description": "As a user, I want consistent navigation so I can switch between diary, calendar, stats, and settings.",
+      "acceptanceCriteria": [
+        "MudBlazor NavMenu or bottom navigation bar with items: Diary, Calendar, Stats, Settings",
+        "Navigation highlights the current active page",
+        "Layout is responsive — bottom nav on mobile, side nav on desktop",
+        "All existing pages accessible via navigation",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Calendar view",
+      "description": "As a user, I want to see my entries on a monthly calendar so I can visualise frequency at a glance.",
+      "acceptanceCriteria": [
+        "Calendar page at /calendar route",
+        "Monthly calendar grid displayed with previous/next month navigation",
+        "Days with entries show a count badge or indicator dot(s)",
+        "Clicking a day shows a list of entries for that day below the calendar",
+        "Current day is visually highlighted",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Dark mode default with light mode toggle",
+      "description": "As a user, I want the app to default to dark mode and let me switch to light mode.",
+      "acceptanceCriteria": [
+        "App loads in dark mode by default on first visit using MudBlazor dark theme",
+        "Theme toggle switch available in settings page or app header",
+        "Theme preference persists in local storage across sessions",
+        "Both dark and light themes render correctly across all pages",
+        "Dark theme uses muted dark greys, not pure black",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Stats — frequency over time chart",
+      "description": "As a user, I want to see how often I log entries over time so I can track regularity.",
+      "acceptanceCriteria": [
+        "Stats page at /stats route",
+        "Bar or line chart showing entries per day or per week",
+        "Selectable time range (last 7 days, 30 days, 90 days)",
+        "Chart renders correctly with zero, few, and many entries",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Stats — Bristol type distribution chart",
+      "description": "As a user, I want to see the breakdown of my Bristol types so I can understand my typical patterns.",
+      "acceptanceCriteria": [
+        "Pie or bar chart on /stats page showing count per Bristol type (1-7)",
+        "Chart uses consistent colours matching Bristol type indicators elsewhere in the app",
+        "Chart renders correctly with zero, few, and many entries",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Stats — time of day patterns chart",
+      "description": "As a user, I want to see what times of day I most commonly log entries so I can spot habits.",
+      "acceptanceCriteria": [
+        "Chart on /stats page showing entry distribution by hour of day",
+        "Uses a bar chart or histogram with 24-hour buckets",
+        "Chart renders correctly with zero, few, and many entries",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Export diary to PDF",
+      "description": "As a user, I want to export my diary data to PDF so I can share it with my doctor.",
+      "acceptanceCriteria": [
+        "Export button accessible from diary list or settings page",
+        "Optional date range filter for the export",
+        "Generates a printable PDF or print-friendly HTML page with all entry details (date/time, Bristol type, notes, tags)",
+        "PDF layout is clean and professional",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "PWA icons, manifest, and offline support",
+      "description": "As a user, I want to install the app on my phone and use it offline so it feels like a native app.",
+      "acceptanceCriteria": [
+        "App icon set created and referenced in manifest.json (192px and 512px)",
+        "manifest.json has correct name, short_name, theme_color, and background_color",
+        "Service worker caches app shell for offline use",
+        "App works fully offline after first load",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Build requires DOTNET_HOST_PATH=$(which dotnet) in addition to DOTNET_CLI_USE_MSBUILD_SERVER=0 on macOS ARM64"
+    }
+  ]
+}
