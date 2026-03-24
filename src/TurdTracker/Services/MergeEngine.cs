@@ -67,7 +67,13 @@ public static class MergeEngine
 
         // Purge tombstones older than 90 days
         var now = DateTime.UtcNow;
-        merged.RemoveAll(e => e.IsDeleted && (now - e.LastModified) > TombstoneMaxAge);
+        var purgedCount = merged.RemoveAll(e => e.IsDeleted && (now - e.LastModified) > TombstoneMaxAge);
+
+        if (purgedCount > 0)
+        {
+            localChanged = true;
+            remoteChanged = true;
+        }
 
         return new MergeResult
         {
