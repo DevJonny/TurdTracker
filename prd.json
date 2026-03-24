@@ -1,20 +1,17 @@
 {
   "project": "TurdTracker",
-  "branchName": "ralph/persist-google-auth",
-  "description": "Persist Google Auth Across Page Reloads — Silent token re-acquisition on startup so previously signed-in users are automatically reconnected without a popup.",
+  "branchName": "ralph/sync-review-fixes",
+  "description": "Google Drive Sync — PR Review Bug Fixes. Critical correctness fixes, reliability improvements, and UX polish from Copilot review of PR #1.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add silent sign-in and session persistence to JS auth module",
-      "description": "As a developer, I need the JS auth module to support silent token re-acquisition and track whether the user has previously signed in.",
+      "title": "Fix LastModified deserialization for legacy entries",
+      "description": "As a developer, I need legacy diary entries to deserialize with default(DateTime) for LastModified so the backfill migration correctly detects and fixes them.",
       "acceptanceCriteria": [
-        "google-auth.js adds a trySilentSignIn() function that calls tokenClient.requestAccessToken({ prompt: '' }) wrapped in a Promise",
-        "trySilentSignIn() resolves with the access token string on success",
-        "trySilentSignIn() resolves with null (does not reject) if silent sign-in fails or popup is blocked",
-        "signIn() persists localStorage.setItem('google-auth-connected', 'true') on successful sign-in",
-        "signOut() removes the flag via localStorage.removeItem('google-auth-connected')",
-        "New hasPreviousSession() function returns localStorage.getItem('google-auth-connected') === 'true'",
-        "The access token itself is never stored in localStorage — only the boolean flag",
+        "DiaryEntry.LastModified property has no initializer (remove '= DateTime.UtcNow')",
+        "DiaryService.AddAsync() still explicitly sets LastModified = DateTime.UtcNow before saving",
+        "Entries deserialized from LocalStorage that lack a LastModified field get default(DateTime) (0001-01-01)",
+        "BackfillLastModifiedIfNeeded in DiaryService detects default(DateTime) and backfills from Timestamp.ToUniversalTime()",
         "Typecheck passes"
       ],
       "priority": 1,
@@ -23,13 +20,15 @@
     },
     {
       "id": "US-002",
-      "title": "Add silent sign-in methods to C# auth service",
-      "description": "As a developer, I need C# wrappers for the new JS silent sign-in and session check functions so the sync service can use them on startup.",
+      "title": "Use ETag instead of Version for Drive concurrency control",
+      "description": "As a developer, I need the Google Drive service to use etag for the If-Match header because Drive's If-Match expects an ETag, not a version number.",
       "acceptanceCriteria": [
-        "IGoogleAuthService adds Task<bool> TrySilentSignInAsync() and Task<bool> HasPreviousSessionAsync()",
-        "GoogleAuthService.TrySilentSignInAsync() calls googleAuth.trySilentSignIn via JS interop, returns true if a non-null token was obtained",
-        "GoogleAuthService.HasPreviousSessionAsync() calls googleAuth.hasPreviousSession via JS interop",
-        "TrySilentSignInAsync() calls EnsureInitializedAsync() before the JS interop call",
+        "FindSyncFileAsync requests fields=files(id,etag) instead of fields=files(id,version)",
+        "Upload URLs use fields=id,etag instead of fields=id,version",
+        "FileResponse model uses [JsonPropertyName(\"etag\")] on a property named ETag",
+        "IGoogleDriveService return tuples use ETag instead of Version",
+        "SyncService.PerformSyncAsync passes etag to upload calls",
+        "If-Match header in UpdateFileAsync uses the etag value",
         "Typecheck passes"
       ],
       "priority": 2,
@@ -38,18 +37,134 @@
     },
     {
       "id": "US-003",
-      "title": "Attempt silent re-auth on app startup",
-      "description": "As a user, I want the app to automatically reconnect to Google Drive when I reload so I don't have to sign in again every time.",
+      "title": "Fix tombstone purge not persisting changes",
+      "description": "As a developer, I need the merge engine to set LocalChanged and RemoteChanged when tombstones are purged so the purge actually gets saved and uploaded.",
       "acceptanceCriteria": [
-        "SyncService.InitializeAsync() checks HasPreviousSessionAsync() after initializing auth",
-        "If HasPreviousSessionAsync() returns true, calls TrySilentSignInAsync()",
-        "If silent sign-in succeeds (returns true), sets SyncStatus to Idle and triggers sync",
-        "If silent sign-in fails (returns false), sets SyncStatus to NotSignedIn",
-        "If HasPreviousSessionAsync() returns false, sets SyncStatus to NotSignedIn immediately with no sign-in attempt",
-        "No popup or interactive prompt is shown during the silent sign-in attempt",
+        "MergeEngine.Merge captures the count returned by RemoveAll for tombstone purge",
+        "If purgedCount > 0, both localChanged and remoteChanged are set to true",
         "Typecheck passes"
       ],
       "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Guarantee OnDataChanged re-subscription after ReplaceAllAsync",
+      "description": "As a developer, I need the sync service to re-subscribe to OnDataChanged even if ReplaceAllAsync throws, so auto-sync never silently stops.",
+      "acceptanceCriteria": [
+        "PerformSyncAsync wraps the unsubscribe/ReplaceAllAsync/resubscribe in try/finally",
+        "The finally block always executes _diaryService.OnDataChanged += OnDataChanged",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Fix CancellationTokenSource leak in debounce",
+      "description": "As a developer, I need the debounce handler to dispose the previous CancellationTokenSource to prevent resource leaks from repeated edits.",
+      "acceptanceCriteria": [
+        "OnDataChanged stores a reference to the previous CTS before canceling",
+        "Previous CTS is disposed after canceling and before creating the replacement",
+        "New CTS is created and token captured after disposal",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Distinguish offline errors from real HTTP failures",
+      "description": "As a user, I want real sync errors (403, 429, 500) to show as errors instead of being silently swallowed as offline.",
+      "acceptanceCriteria": [
+        "SyncAsync catches HttpRequestException and checks ex.StatusCode",
+        "When StatusCode is null (network/offline failure), sync skips silently and reverts to previous state",
+        "When StatusCode has a value (e.g. 403, 429, 500), SyncStatus is set to Error",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Lazy-initialize Google Auth to prevent race conditions",
+      "description": "As a developer, I need GoogleAuthService to lazily initialize so sign-in works from any call site without depending on layout initialization order.",
+      "acceptanceCriteria": [
+        "GoogleAuthService has a private bool _initialized flag (default false)",
+        "InitializeAsync sets _initialized = true after calling JS initialize and is idempotent (skips if already initialized)",
+        "A private EnsureInitializedAsync method calls InitializeAsync if _initialized is false",
+        "SignInAsync, IsSignedInAsync, and GetAccessTokenAsync all call EnsureInitializedAsync before their JS interop calls",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Set auth header per-request instead of on shared HttpClient",
+      "description": "As a developer, I need the Google Drive service to set Authorization on individual requests to prevent the Bearer token from leaking to non-Drive requests.",
+      "acceptanceCriteria": [
+        "SetAuthHeaderAsync is replaced with a GetAuthTokenAsync method that returns the token string",
+        "GetAuthTokenAsync throws InvalidOperationException if token is null or empty",
+        "FindSyncFileAsync uses HttpRequestMessage + SendAsync instead of GetAsync, with Authorization header on the request",
+        "DownloadSyncFileAsync uses HttpRequestMessage + SendAsync instead of GetAsync, with Authorization header on the request",
+        "CreateFileAsync sets Authorization header on the HttpRequestMessage (new request message for POST)",
+        "UpdateFileAsync already uses HttpRequestMessage — add Authorization header on it",
+        "_httpClient.DefaultRequestHeaders.Authorization is never set anywhere",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Sign-out updates sync status in app bar",
+      "description": "As a user, I want the app bar sync icon to immediately show Not Signed In after I sign out instead of staying green.",
+      "acceptanceCriteria": [
+        "Settings.razor OnSignOutClick calls SyncService.SyncAsync() after GoogleAuthService.SignOutAsync()",
+        "SyncAsync detects not-signed-in and sets SyncStatus to NotSignedIn",
+        "App bar sync icon changes to grey CloudOff after sign-out",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Apply spin animation to syncing icon",
+      "description": "As a user, I want the sync icon to spin while syncing so I can see something is happening.",
+      "acceptanceCriteria": [
+        "The sync MudIconButton in MainLayout gets a conditional CSS class (e.g. 'sync-spinning') when SyncStatus == Syncing",
+        "The existing spin keyframes in MainLayout.razor.css are applied via that class selector",
+        "The icon stops spinning when sync completes or errors",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Show actual error details in sync error snackbar",
+      "description": "As a user, I want to see what went wrong when sync fails instead of a generic message.",
+      "acceptanceCriteria": [
+        "ISyncService has a string? LastError property",
+        "SyncService captures ex.Message in catch blocks and stores it in LastError",
+        "LastError is cleared (set to null) at the start of each SyncAsync call",
+        "MainLayout error snackbar displays SyncService.LastError when available, falling back to generic message if null",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
       "passes": true,
       "notes": ""
     }
