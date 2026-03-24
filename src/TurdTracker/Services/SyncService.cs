@@ -162,7 +162,9 @@ public class SyncService : ISyncService, IDisposable
     private void OnDataChanged()
     {
         // Debounce: cancel any pending sync and schedule a new one
-        _debounceCts?.Cancel();
+        var previousCts = _debounceCts;
+        previousCts?.Cancel();
+        previousCts?.Dispose();
         _debounceCts = new CancellationTokenSource();
         var token = _debounceCts.Token;
 
