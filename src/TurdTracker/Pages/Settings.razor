@@ -109,6 +109,7 @@
     {
         await GoogleAuthService.SignOutAsync();
         _isSignedIn = false;
+        await SyncService.SyncAsync();
     }
 
     private async Task OnSyncNowClick()
