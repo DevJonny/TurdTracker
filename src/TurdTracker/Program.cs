@@ -14,5 +14,6 @@ builder.Services.AddMudServices();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddScoped<IDiaryService, DiaryService>();
 builder.Services.AddScoped<IThemeService, ThemeService>();
+builder.Services.AddScoped<IGoogleAuthService, GoogleAuthService>();
 
 await builder.Build().RunAsync();
