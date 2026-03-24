@@ -44,6 +44,7 @@
                         return;
                     }
                     accessToken = response.access_token;
+                    localStorage.setItem('google-auth-connected', 'true');
                     resolve(accessToken);
                 };
                 tokenClient.error_callback = (error) => {
@@ -58,6 +59,33 @@
                 google.accounts.oauth2.revoke(accessToken);
                 accessToken = null;
             }
+            localStorage.removeItem('google-auth-connected');
+        },
+
+        trySilentSignIn: function () {
+            return new Promise((resolve) => {
+                if (!tokenClient) {
+                    resolve(null);
+                    return;
+                }
+                tokenClient.callback = (response) => {
+                    if (response.error) {
+                        resolve(null);
+                        return;
+                    }
+                    accessToken = response.access_token;
+                    localStorage.setItem('google-auth-connected', 'true');
+                    resolve(accessToken);
+                };
+                tokenClient.error_callback = () => {
+                    resolve(null);
+                };
+                tokenClient.requestAccessToken({ prompt: '' });
+            });
+        },
+
+        hasPreviousSession: function () {
+            return localStorage.getItem('google-auth-connected') === 'true';
         },
 
         getAccessToken: function () {
