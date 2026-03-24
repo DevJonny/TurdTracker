@@ -1,12 +1,30 @@
 @page "/"
+@using Blazored.LocalStorage
 @using TurdTracker.Models
 @using TurdTracker.Services
 @inject IDiaryService DiaryService
 @inject NavigationManager Navigation
+@inject IGoogleAuthService GoogleAuthService
+@inject ISyncService SyncService
+@inject ILocalStorageService LocalStorage
 
 <PageTitle>Diary</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="py-4">
+    @if (_showBanner)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="@DismissBanner">
+            <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                <MudText>Sync your diary across devices with Google Drive</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Cloud"
+                           OnClick="@OnConnectClick">
+                    Connect Google Drive
+                </MudButton>
+            </div>
+        </MudAlert>
+    }
+
     <MudText Typo="Typo.h4" Class="mb-4">Diary</MudText>
 
     @if (_loading)
@@ -64,14 +82,43 @@
         OnClick="@(() => Navigation.NavigateTo("log"))" />
 
 @code {
+    private const string BannerDismissedKey = "sync-banner-dismissed";
     private List<DiaryEntry> _entries = [];
     private bool _loading = true;
+    private bool _showBanner;
 
     protected override async Task OnInitializedAsync()
     {
         var all = await DiaryService.GetAllAsync();
         _entries = all.OrderByDescending(e => e.Timestamp).ToList();
         _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var isSignedIn = await GoogleAuthService.IsSignedInAsync();
+            var isDismissed = await LocalStorage.GetItemAsync<bool>(BannerDismissedKey);
+            _showBanner = !isSignedIn && !isDismissed;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnConnectClick()
+    {
+        var token = await GoogleAuthService.SignInAsync();
+        if (token != null)
+        {
+            _showBanner = false;
+            await SyncService.SyncAsync();
+        }
+    }
+
+    private async Task DismissBanner()
+    {
+        _showBanner = false;
+        await LocalStorage.SetItemAsync(BannerDismissedKey, true);
     }
 
     private static string Truncate(string text, int maxLength)
