@@ -19,7 +19,7 @@
             <MudIcon Icon="@Icons.Material.Filled.MenuBook" Size="Size.Large" Color="Color.Secondary" />
             <MudText Typo="Typo.h6" Class="mt-4">No entries yet</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Start tracking by logging your first entry.</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => Navigation.NavigateTo("/log"))">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => Navigation.NavigateTo("log"))">
                 Log Entry
             </MudButton>
         </MudPaper>
@@ -29,7 +29,7 @@
         <MudStack Spacing="2">
             @foreach (var entry in _entries)
             {
-                <MudPaper Class="pa-3 cursor-pointer" Elevation="2" @onclick="@(() => Navigation.NavigateTo($"/entry/{entry.Id}"))">
+                <MudPaper Class="pa-3 cursor-pointer" Elevation="2" @onclick="@(() => Navigation.NavigateTo($"entry/{entry.Id}"))">
                     <div class="d-flex align-center justify-space-between">
                         <div class="d-flex align-center">
                             <MudAvatar Color="Color.Primary" Size="Size.Medium" Class="mr-3">@entry.BristolType</MudAvatar>
@@ -61,7 +61,7 @@
 <MudFab Style="position: fixed; bottom: 80px; right: 24px;"
         Color="Color.Primary"
         StartIcon="@Icons.Material.Filled.Add"
-        OnClick="@(() => Navigation.NavigateTo("/log"))" />
+        OnClick="@(() => Navigation.NavigateTo("log"))" />
 
 @code {
     private List<DiaryEntry> _entries = [];

@@ -17,7 +17,7 @@
         <MudPaper Class="pa-8 text-center" Elevation="2">
             <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" Size="Size.Large" Color="Color.Error" />
             <MudText Typo="Typo.h6" Class="mt-4">Entry not found</MudText>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="@(() => Navigation.NavigateTo("/"))">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="@(() => Navigation.NavigateTo(""))">
                 Back to Diary
             </MudButton>
         </MudPaper>
@@ -102,7 +102,7 @@
             </MudStack>
         </MudPaper>
 
-        <MudButton Variant="Variant.Text" Color="Color.Default" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mt-4" OnClick="@(() => Navigation.NavigateTo("/"))">
+        <MudButton Variant="Variant.Text" Color="Color.Default" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mt-4" OnClick="@(() => Navigation.NavigateTo(""))">
             Back to Diary
         </MudButton>
     }
@@ -169,7 +169,7 @@
         if (result == true)
         {
             await DiaryService.DeleteAsync(Id);
-            Navigation.NavigateTo("/");
+            Navigation.NavigateTo("");
         }
     }
 }

@@ -73,7 +73,7 @@
                 <MudStack Spacing="2">
                     @foreach (var entry in selectedEntries)
                     {
-                        <MudPaper Class="pa-3 cursor-pointer" Elevation="2" @onclick="@(() => Navigation.NavigateTo($"/entry/{entry.Id}"))">
+                        <MudPaper Class="pa-3 cursor-pointer" Elevation="2" @onclick="@(() => Navigation.NavigateTo($"entry/{entry.Id}"))">
                             <div class="d-flex align-center justify-space-between">
                                 <div class="d-flex align-center">
                                     <MudAvatar Color="Color.Primary" Size="Size.Medium" Class="mr-3">@entry.BristolType</MudAvatar>
