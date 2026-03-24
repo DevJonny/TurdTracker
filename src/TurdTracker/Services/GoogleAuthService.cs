@@ -19,23 +19,19 @@ public class GoogleAuthService : IGoogleAuthService
         if (!_initialized)
         {
             await InitializeAsync();
-            _initialized = true;
         }
     }
 
     public async Task InitializeAsync()
     {
-        if (_initialized)
-        {
-            return;
-        }
-
+        if (_initialized) return;
         await _jsRuntime.InvokeVoidAsync("googleAuth.initialize", ClientId);
         _initialized = true;
     }
 
     public async Task<string?> SignInAsync()
     {
+        await EnsureInitializedAsync();
         return await _jsRuntime.InvokeAsync<string?>("googleAuth.signIn");
     }
 
@@ -46,11 +42,13 @@ public class GoogleAuthService : IGoogleAuthService
 
     public async Task<bool> IsSignedInAsync()
     {
+        await EnsureInitializedAsync();
         return await _jsRuntime.InvokeAsync<bool>("googleAuth.isSignedIn");
     }
 
     public async Task<string?> GetAccessTokenAsync()
     {
+        await EnsureInitializedAsync();
         return await _jsRuntime.InvokeAsync<string?>("googleAuth.getAccessToken");
     }
 
