@@ -1,6 +1,9 @@
 @page "/settings"
 @inject IThemeService ThemeService
 @inject NavigationManager Navigation
+@inject IGoogleAuthService GoogleAuthService
+@inject ISyncService SyncService
+@implements IDisposable
 
 <PageTitle>Settings</PageTitle>
 
@@ -19,6 +22,47 @@
         </MudStack>
     </MudPaper>
 
+    <MudPaper Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" Class="mb-3">Google Drive Sync</MudText>
+        @if (_isSignedIn)
+        {
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@GetSyncStatusIcon()" Color="@GetSyncStatusColor()" />
+                    <MudText>@GetSyncStatusText()</MudText>
+                </MudStack>
+                @if (SyncService.LastSyncedUtc.HasValue)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Last synced: @SyncService.LastSyncedUtc.Value.ToLocalTime().ToString("g")
+                    </MudText>
+                }
+                <MudStack Row="true" Spacing="2">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Sync"
+                               OnClick="@OnSyncNowClick"
+                               Disabled="@(SyncService.SyncStatus == SyncStatus.Syncing)">
+                        Sync Now
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error"
+                               StartIcon="@Icons.Material.Filled.Logout"
+                               OnClick="@OnSignOutClick">
+                        Sign Out
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Cloud"
+                       OnClick="@OnSignInClick"
+                       FullWidth="true">
+                Sign in with Google
+            </MudButton>
+        }
+    </MudPaper>
+
     <MudPaper Class="pa-4">
         <MudText Typo="Typo.h6" Class="mb-3">Data</MudText>
         <MudButton Variant="Variant.Outlined" Color="Color.Primary"
@@ -32,12 +76,15 @@
 
 @code {
     private bool _isDarkMode = true;
+    private bool _isSignedIn;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             _isDarkMode = await ThemeService.GetIsDarkModeAsync();
+            _isSignedIn = await GoogleAuthService.IsSignedInAsync();
+            SyncService.OnSyncStatusChanged += OnSyncStatusChanged;
             StateHasChanged();
         }
     }
@@ -46,5 +93,63 @@
     {
         _isDarkMode = value;
         await ThemeService.SetIsDarkModeAsync(_isDarkMode);
+    }
+
+    private async Task OnSignInClick()
+    {
+        var token = await GoogleAuthService.SignInAsync();
+        if (token != null)
+        {
+            _isSignedIn = true;
+            await SyncService.SyncAsync();
+        }
+    }
+
+    private async Task OnSignOutClick()
+    {
+        await GoogleAuthService.SignOutAsync();
+        _isSignedIn = false;
+    }
+
+    private async Task OnSyncNowClick()
+    {
+        await SyncService.SyncAsync();
+    }
+
+    private void OnSyncStatusChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetSyncStatusIcon() => SyncService.SyncStatus switch
+    {
+        SyncStatus.Synced => Icons.Material.Filled.CloudDone,
+        SyncStatus.Syncing => Icons.Material.Filled.CloudSync,
+        SyncStatus.Error => Icons.Material.Filled.CloudOff,
+        SyncStatus.Idle => Icons.Material.Filled.CloudDone,
+        _ => Icons.Material.Filled.CloudOff
+    };
+
+    private Color GetSyncStatusColor() => SyncService.SyncStatus switch
+    {
+        SyncStatus.Synced => Color.Success,
+        SyncStatus.Syncing => Color.Info,
+        SyncStatus.Error => Color.Error,
+        SyncStatus.Idle => Color.Success,
+        _ => Color.Default
+    };
+
+    private string GetSyncStatusText() => SyncService.SyncStatus switch
+    {
+        SyncStatus.Synced => "Connected and synced",
+        SyncStatus.Syncing => "Syncing...",
+        SyncStatus.Error => "Sync error — check your connection",
+        SyncStatus.Idle => "Connected",
+        _ => "Unknown"
+    };
+
+    public void Dispose()
+    {
+        SyncService.OnSyncStatusChanged -= OnSyncStatusChanged;
     }
 }

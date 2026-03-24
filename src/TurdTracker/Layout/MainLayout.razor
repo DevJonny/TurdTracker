@@ -1,6 +1,9 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Navigation
 @inject IThemeService ThemeService
+@inject ISyncService SyncService
+@inject ISnackbar Snackbar
+@implements IDisposable
 
 <MudThemeProvider Theme="_theme" @bind-IsDarkMode="_isDarkMode" />
 <MudPopoverProvider />
@@ -13,6 +16,9 @@
                        OnClick="@ToggleDrawer" Class="desktop-only" />
         <MudText Typo="Typo.h6">TurdTracker</MudText>
         <MudSpacer />
+        <MudTooltip Text="@GetSyncTooltip()">
+            <MudIconButton Icon="@GetSyncIcon()" Color="@GetSyncColor()" OnClick="@OnSyncIconClick" />
+        </MudTooltip>
         <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
                        Color="Color.Inherit" OnClick="@ToggleTheme" />
     </MudAppBar>
@@ -81,6 +87,8 @@
         if (firstRender)
         {
             _isDarkMode = await ThemeService.GetIsDarkModeAsync();
+            SyncService.OnSyncStatusChanged += OnSyncStatusChanged;
+            await SyncService.InitializeAsync();
             StateHasChanged();
         }
     }
@@ -94,6 +102,64 @@
     private void ToggleDrawer()
     {
         _drawerOpen = !_drawerOpen;
+    }
+
+    private void OnSyncStatusChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string GetSyncIcon() => SyncService.SyncStatus switch
+    {
+        SyncStatus.Synced => Icons.Material.Filled.CloudDone,
+        SyncStatus.Syncing => Icons.Material.Filled.CloudSync,
+        SyncStatus.Error => Icons.Material.Filled.CloudOff,
+        SyncStatus.NotSignedIn => Icons.Material.Filled.CloudOff,
+        SyncStatus.Idle => Icons.Material.Filled.CloudDone,
+        _ => Icons.Material.Filled.CloudOff
+    };
+
+    private Color GetSyncColor() => SyncService.SyncStatus switch
+    {
+        SyncStatus.Synced => Color.Success,
+        SyncStatus.Syncing => Color.Inherit,
+        SyncStatus.Error => Color.Error,
+        SyncStatus.NotSignedIn => Color.Default,
+        SyncStatus.Idle => Color.Success,
+        _ => Color.Default
+    };
+
+    private string GetSyncTooltip()
+    {
+        var status = SyncService.SyncStatus switch
+        {
+            SyncStatus.Synced => "Synced",
+            SyncStatus.Syncing => "Syncing...",
+            SyncStatus.Error => "Sync error",
+            SyncStatus.NotSignedIn => "Not signed in",
+            SyncStatus.Idle => "Synced",
+            _ => "Unknown"
+        };
+
+        if (SyncService.LastSyncedUtc.HasValue)
+        {
+            return $"{status} — Last synced: {SyncService.LastSyncedUtc.Value.ToLocalTime():g}";
+        }
+
+        return $"{status} — Not synced yet";
+    }
+
+    private void OnSyncIconClick()
+    {
+        if (SyncService.SyncStatus == SyncStatus.Error)
+        {
+            Snackbar.Add("Sync failed. Check your connection and try again from Settings.", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnSyncStatusChanged -= OnSyncStatusChanged;
     }
 
     private Color GetNavColor(string href)
