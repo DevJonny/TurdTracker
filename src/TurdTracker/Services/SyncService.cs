@@ -74,10 +74,15 @@ public class SyncService : ISyncService, IDisposable
             LastSyncedUtc = DateTime.UtcNow;
             SetStatus(SyncStatus.Synced);
         }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            // Offline / network failure — skip silently, revert to previous good state
+            SetStatus(LastSyncedUtc.HasValue ? SyncStatus.Synced : SyncStatus.Idle);
+        }
         catch (HttpRequestException)
         {
-            // Offline — skip silently, revert to previous good state
-            SetStatus(LastSyncedUtc.HasValue ? SyncStatus.Synced : SyncStatus.Idle);
+            // Real HTTP error (403, 429, 500, etc.) — surface as error
+            SetStatus(SyncStatus.Error);
         }
         catch (Exception)
         {
