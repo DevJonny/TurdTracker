@@ -37,6 +37,18 @@ public class SyncService : ISyncService, IDisposable
             SetStatus(SyncStatus.Idle);
             await SyncAsync();
         }
+        else if (await _authService.HasPreviousSessionAsync())
+        {
+            if (await _authService.TrySilentSignInAsync())
+            {
+                SetStatus(SyncStatus.Idle);
+                await SyncAsync();
+            }
+            else
+            {
+                SetStatus(SyncStatus.NotSignedIn);
+            }
+        }
         else
         {
             SetStatus(SyncStatus.NotSignedIn);
