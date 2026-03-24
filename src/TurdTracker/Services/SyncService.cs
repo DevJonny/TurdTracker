@@ -119,7 +119,7 @@ public class SyncService : ISyncService, IDisposable
         var localEntries = await _diaryService.GetAllIncludingDeletedAsync();
 
         // 2. Download remote
-        var (fileId, version) = await _driveService.FindSyncFileAsync();
+        var (fileId, etag) = await _driveService.FindSyncFileAsync();
 
         SyncEnvelope? remoteEnvelope = null;
         if (fileId != null)
@@ -149,7 +149,7 @@ public class SyncService : ISyncService, IDisposable
                 LastSyncedUtc = DateTime.UtcNow,
                 Entries = result.MergedEntries
             };
-            await _driveService.UploadSyncFileAsync(envelope, fileId, version);
+            await _driveService.UploadSyncFileAsync(envelope, fileId, etag);
         }
     }
 

@@ -4,7 +4,7 @@ namespace TurdTracker.Services;
 
 public interface IGoogleDriveService
 {
-    Task<(string? FileId, string? Version)> FindSyncFileAsync();
+    Task<(string? FileId, string? ETag)> FindSyncFileAsync();
     Task<SyncEnvelope?> DownloadSyncFileAsync(string fileId);
-    Task<(string FileId, string Version)> UploadSyncFileAsync(SyncEnvelope envelope, string? existingFileId, string? version);
+    Task<(string FileId, string ETag)> UploadSyncFileAsync(SyncEnvelope envelope, string? existingFileId, string? etag);
 }

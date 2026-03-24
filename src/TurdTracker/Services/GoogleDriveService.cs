@@ -21,18 +21,18 @@ public class GoogleDriveService : IGoogleDriveService
         _authService = authService;
     }
 
-    public async Task<(string? FileId, string? Version)> FindSyncFileAsync()
+    public async Task<(string? FileId, string? ETag)> FindSyncFileAsync()
     {
         await SetAuthHeaderAsync();
 
-        var url = $"{DriveApiBase}/files?spaces=appDataFolder&q=name%3D'{SyncFileName}'&fields=files(id,version)";
+        var url = $"{DriveApiBase}/files?spaces=appDataFolder&q=name%3D'{SyncFileName}'&fields=files(id,etag)";
         var response = await _httpClient.GetAsync(url);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<FileListResponse>();
         var file = result?.Files?.FirstOrDefault();
 
-        return file != null ? (file.Id, file.Version) : (null, null);
+        return file != null ? (file.Id, file.ETag) : (null, null);
     }
 
     public async Task<SyncEnvelope?> DownloadSyncFileAsync(string fileId)
@@ -46,7 +46,7 @@ public class GoogleDriveService : IGoogleDriveService
         return await response.Content.ReadFromJsonAsync<SyncEnvelope>();
     }
 
-    public async Task<(string FileId, string Version)> UploadSyncFileAsync(SyncEnvelope envelope, string? existingFileId, string? version)
+    public async Task<(string FileId, string ETag)> UploadSyncFileAsync(SyncEnvelope envelope, string? existingFileId, string? etag)
     {
         await SetAuthHeaderAsync();
 
@@ -54,7 +54,7 @@ public class GoogleDriveService : IGoogleDriveService
 
         if (existingFileId != null)
         {
-            return await UpdateFileAsync(existingFileId, version, jsonContent);
+            return await UpdateFileAsync(existingFileId, etag, jsonContent);
         }
         else
         {
@@ -62,7 +62,7 @@ public class GoogleDriveService : IGoogleDriveService
         }
     }
 
-    private async Task<(string FileId, string Version)> CreateFileAsync(string jsonContent)
+    private async Task<(string FileId, string ETag)> CreateFileAsync(string jsonContent)
     {
         var metadata = new { name = SyncFileName, parents = new[] { "appDataFolder" } };
         var metadataJson = JsonSerializer.Serialize(metadata);
@@ -74,32 +74,32 @@ public class GoogleDriveService : IGoogleDriveService
         multipartContent.Add(metadataPart);
         multipartContent.Add(filePart);
 
-        var url = $"{DriveUploadBase}/files?uploadType=multipart&fields=id,version";
+        var url = $"{DriveUploadBase}/files?uploadType=multipart&fields=id,etag";
         var response = await _httpClient.PostAsync(url, multipartContent);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<FileResponse>();
-        return (result!.Id!, result.Version!);
+        return (result!.Id!, result.ETag!);
     }
 
-    private async Task<(string FileId, string Version)> UpdateFileAsync(string fileId, string? version, string jsonContent)
+    private async Task<(string FileId, string ETag)> UpdateFileAsync(string fileId, string? etag, string jsonContent)
     {
-        var url = $"{DriveUploadBase}/files/{fileId}?uploadType=media&fields=id,version";
+        var url = $"{DriveUploadBase}/files/{fileId}?uploadType=media&fields=id,etag";
         var request = new HttpRequestMessage(HttpMethod.Patch, url)
         {
             Content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json")
         };
 
-        if (version != null)
+        if (etag != null)
         {
-            request.Headers.Add("If-Match", version);
+            request.Headers.Add("If-Match", etag);
         }
 
         var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<FileResponse>();
-        return (result!.Id!, result.Version!);
+        return (result!.Id!, result.ETag!);
     }
 
     private async Task SetAuthHeaderAsync()
@@ -119,7 +119,7 @@ public class GoogleDriveService : IGoogleDriveService
         [JsonPropertyName("id")]
         public string? Id { get; set; }
 
-        [JsonPropertyName("version")]
-        public string? Version { get; set; }
+        [JsonPropertyName("etag")]
+        public string? ETag { get; set; }
     }
 }
