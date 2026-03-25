@@ -1,0 +1,102 @@
+{
+  "project": "TurdTracker",
+  "branchName": "ralph/sync-ui-refresh",
+  "description": "Sync UI Refresh — Pages don't update after sync downloads new data from Google Drive. Add OnDataMerged event and page subscriptions so synced entries appear without manual refresh. Add status notification for sync completion.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add OnDataMerged event to SyncService",
+      "description": "As a developer, I need SyncService to fire an event when sync has downloaded and saved new entries locally, so pages can subscribe and refresh their data.",
+      "acceptanceCriteria": [
+        "ISyncService exposes 'event Action? OnDataMerged'",
+        "SyncService fires OnDataMerged after ReplaceAllAsync() completes, only when MergeResult.LocalChanged is true",
+        "OnDataMerged fires AFTER OnDataChanged re-subscription is restored in the finally block",
+        "OnDataMerged is NOT fired when sync finds no local changes needed",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Home page refreshes entries after sync merge",
+      "description": "As a user, I want the Home page to automatically show new entries from other devices after sync completes, so I don't have to refresh the page.",
+      "acceptanceCriteria": [
+        "Home.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-fetches entries via DiaryService.GetAllAsync() and updates the displayed list with the same ordering",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Calendar page refreshes after sync merge",
+      "description": "As a user, I want the Calendar page to show synced entries without a page refresh.",
+      "acceptanceCriteria": [
+        "Calendar.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-fetches diary entries and re-renders calendar data",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Stats page refreshes after sync merge",
+      "description": "As a user, I want the Stats page to reflect synced data without a page refresh.",
+      "acceptanceCriteria": [
+        "Stats.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-computes statistics from updated data",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Export page refreshes after sync merge",
+      "description": "As a user, I want the Export page to include synced entries without a page refresh.",
+      "acceptanceCriteria": [
+        "Export.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-fetches entry data",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Show snackbar notification when sync downloads new data",
+      "description": "As a user, I want to see a brief notification when sync has pulled new data so I know my app is up to date across devices.",
+      "acceptanceCriteria": [
+        "MainLayout.razor subscribes to SyncService.OnDataMerged",
+        "On merge event, shows a MudBlazor snackbar with message like 'Sync complete — new entries loaded'",
+        "Snackbar auto-dismisses after 3 seconds",
+        "Normal syncs with no new data do NOT show this snackbar (only OnDataMerged triggers it)",
+        "Unsubscribes from OnDataMerged in Dispose()",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}
