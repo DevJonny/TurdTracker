@@ -126,13 +126,22 @@
         _loading = false;
     }
 
-    private async void OnDataMerged()
+    private void OnDataMerged()
     {
-        _entries = await DiaryService.GetAllAsync();
-        _entriesByDate = _entries
-            .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
-            .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
-        await InvokeAsync(StateHasChanged);
+        _ = HandleDataMergedAsync();
+    }
+
+    private async Task HandleDataMergedAsync()
+    {
+        try
+        {
+            _entries = await DiaryService.GetAllAsync();
+            _entriesByDate = _entries
+                .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
+                .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
     }
 
     public void Dispose()

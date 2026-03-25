@@ -113,10 +113,16 @@
 
     private void OnDataMerged()
     {
-        InvokeAsync(() => Snackbar.Add("Sync complete — new entries loaded", Severity.Info, config =>
+        InvokeAsync(() =>
         {
-            config.VisibleStateDuration = 3000;
-        }));
+            if (SyncService.SyncStatus != SyncStatus.Synced && SyncService.SyncStatus != SyncStatus.Idle)
+                return;
+
+            Snackbar.Add("Sync complete — data is up to date", Severity.Info, config =>
+            {
+                config.VisibleStateDuration = 3000;
+            });
+        });
     }
 
     private string GetSyncIcon() => SyncService.SyncStatus switch
