@@ -2,7 +2,9 @@
 @using TurdTracker.Models
 @using TurdTracker.Services
 @inject IDiaryService DiaryService
+@inject ISyncService SyncService
 @inject NavigationManager Navigation
+@implements IDisposable
 
 <PageTitle>Calendar</PageTitle>
 
@@ -115,12 +117,27 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnDataMerged += OnDataMerged;
         _entries = await DiaryService.GetAllAsync();
         _entriesByDate = _entries
             .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
             .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
         _selectedDate = DateOnly.FromDateTime(DateTime.Today);
         _loading = false;
+    }
+
+    private async void OnDataMerged()
+    {
+        _entries = await DiaryService.GetAllAsync();
+        _entriesByDate = _entries
+            .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
+            .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnDataMerged -= OnDataMerged;
     }
 
     private List<DateOnly?> _calendarDays
