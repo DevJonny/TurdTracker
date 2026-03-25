@@ -5,6 +5,7 @@
 
     let tokenClient = null;
     let accessToken = null;
+    let pendingTokenRequest = null;
 
     function loadGisScript() {
         return new Promise((resolve, reject) => {
@@ -33,12 +34,16 @@
         },
 
         signIn: function () {
-            return new Promise((resolve, reject) => {
+            if (pendingTokenRequest) {
+                return pendingTokenRequest;
+            }
+            pendingTokenRequest = new Promise((resolve, reject) => {
                 if (!tokenClient) {
                     reject(new Error('Google Auth not initialized. Call initialize() first.'));
                     return;
                 }
                 tokenClient.callback = (response) => {
+                    pendingTokenRequest = null;
                     if (response.error) {
                         reject(new Error(response.error));
                         return;
@@ -48,10 +53,12 @@
                     resolve(accessToken);
                 };
                 tokenClient.error_callback = (error) => {
+                    pendingTokenRequest = null;
                     reject(new Error(error.message || 'Sign-in failed'));
                 };
                 tokenClient.requestAccessToken();
             });
+            return pendingTokenRequest;
         },
 
         signOut: function () {
@@ -63,12 +70,16 @@
         },
 
         trySilentSignIn: function () {
-            return new Promise((resolve) => {
+            if (pendingTokenRequest) {
+                return pendingTokenRequest;
+            }
+            pendingTokenRequest = new Promise((resolve) => {
                 if (!tokenClient) {
                     resolve(null);
                     return;
                 }
                 tokenClient.callback = (response) => {
+                    pendingTokenRequest = null;
                     if (response.error) {
                         resolve(null);
                         return;
@@ -78,10 +89,12 @@
                     resolve(accessToken);
                 };
                 tokenClient.error_callback = () => {
+                    pendingTokenRequest = null;
                     resolve(null);
                 };
                 tokenClient.requestAccessToken({ prompt: '' });
             });
+            return pendingTokenRequest;
         },
 
         hasPreviousSession: function () {

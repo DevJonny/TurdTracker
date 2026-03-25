@@ -10,7 +10,7 @@
 - DI registration pattern: `builder.Services.AddScoped<IService, Service>()` in Program.cs
 - `_Imports.razor` has global `@using TurdTracker.Services` — no per-page using needed
 - JS interop files live in `wwwroot/js/`; call from C# via `IJSRuntime.InvokeAsync("googleAuth.method", args)` (no `window.` prefix)
-- GoogleAuthService has lazy init via `_initialized` flag and `EnsureInitializedAsync()` — all public methods call it before JS interop
+- GoogleAuthService has lazy init via `_initialized` flag and `EnsureInitializedAsync()` — used by `TrySilentSignInAsync()` before JS interop; `HasPreviousSessionAsync()` skips init since it only reads localStorage
 - GoogleAuthService wraps JS interop; inject `IGoogleAuthService` for auth operations
 - SyncService.InitializeAsync() is called from MainLayout.OnAfterRenderAsync(firstRender) — this is the app startup entry point for sync
 - GIS token client uses `requestAccessToken()` for interactive sign-in; `requestAccessToken({ prompt: '' })` for silent (no popup)
