@@ -16,6 +16,7 @@ public class SyncService : ISyncService, IDisposable
     public string? LastError { get; private set; }
     public DateTime? LastSyncedUtc { get; private set; }
     public event Action? OnSyncStatusChanged;
+    public event Action? OnDataMerged;
 
     public SyncService(
         IDiaryService diaryService,
@@ -166,6 +167,9 @@ public class SyncService : ISyncService, IDisposable
             {
                 _diaryService.OnDataChanged += OnDataChanged;
             }
+
+            // Notify pages that merged data is available for refresh
+            OnDataMerged?.Invoke();
         }
 
         // 5. Upload if changed
