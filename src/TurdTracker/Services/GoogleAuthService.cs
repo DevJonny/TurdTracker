@@ -2,7 +2,7 @@ using Microsoft.JSInterop;
 
 namespace TurdTracker.Services;
 
-public class GoogleAuthService : IGoogleAuthService
+public class GoogleAuthService : IGoogleAuthService, IDisposable
 {
     private const string ClientId = "101133685796-p43f4uqejgt9lgce4lvibrnoam8oegb1.apps.googleusercontent.com";
 
@@ -73,5 +73,10 @@ public class GoogleAuthService : IGoogleAuthService
     public async Task<bool> HasPreviousSessionAsync()
     {
         return await _jsRuntime.InvokeAsync<bool>("googleAuth.hasPreviousSession");
+    }
+
+    public void Dispose()
+    {
+        _initLock.Dispose();
     }
 }
