@@ -7,6 +7,7 @@
 @inject IGoogleAuthService GoogleAuthService
 @inject ISyncService SyncService
 @inject ILocalStorageService LocalStorage
+@implements IDisposable
 
 <PageTitle>Diary</PageTitle>
 
@@ -89,9 +90,22 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnDataMerged += OnDataMerged;
         var all = await DiaryService.GetAllAsync();
         _entries = all.OrderByDescending(e => e.Timestamp).ToList();
         _loading = false;
+    }
+
+    private async void OnDataMerged()
+    {
+        var all = await DiaryService.GetAllAsync();
+        _entries = all.OrderByDescending(e => e.Timestamp).ToList();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnDataMerged -= OnDataMerged;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
