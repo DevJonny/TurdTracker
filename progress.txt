@@ -17,3 +17,42 @@
 - GIS silent sign-in fails if: Google session expired, consent revoked, or popup blocked — handle gracefully by resolving null
 
 ---
+
+## 2026-03-24 - US-001
+- Implemented silent sign-in and session persistence in JS auth module
+- Files changed: `src/TurdTracker/wwwroot/js/google-auth.js`
+- Added `trySilentSignIn()` — uses `requestAccessToken({ prompt: '' })`, resolves with token or null (never rejects)
+- Added `hasPreviousSession()` — reads `google-auth-connected` flag from localStorage
+- Modified `signIn()` to set `google-auth-connected` in localStorage on success
+- Modified `signOut()` to remove the localStorage flag
+- Access token is never stored in localStorage — only the boolean flag
+- **Learnings for future iterations:**
+  - `trySilentSignIn` also sets the localStorage flag on success to stay consistent with `signIn`
+  - Both `callback` and `error_callback` on tokenClient must be set before each `requestAccessToken` call since they're shared state
+  - The signOut() localStorage removal is outside the `if (accessToken)` block so the flag is always cleaned up
+---
+
+## 2026-03-24 - US-002
+- Added `TrySilentSignInAsync()` and `HasPreviousSessionAsync()` to `IGoogleAuthService` interface
+- Implemented both methods in `GoogleAuthService` with `EnsureInitializedAsync()` guard
+- Added `EnsureInitializedAsync()` private method with `_initialized` flag for lazy init
+- `InitializeAsync()` also sets `_initialized = true` so explicit init and lazy init stay in sync
+- Files changed: `src/TurdTracker/Services/IGoogleAuthService.cs`, `src/TurdTracker/Services/GoogleAuthService.cs`
+- **Learnings for future iterations:**
+  - `trySilentSignIn` JS function returns a string token or null — C# side uses `InvokeAsync<string?>` and checks for non-null to return bool
+  - `hasPreviousSession` JS function returns a bool directly — can use `InvokeAsync<bool>` without conversion
+  - Both new methods call `EnsureInitializedAsync()` first, following the lazy init pattern
+---
+
+## 2026-03-24 - US-003
+- Modified `SyncService.InitializeAsync()` to attempt silent re-auth on startup
+- After `InitializeAsync()` and `IsSignedInAsync()` check, added `HasPreviousSessionAsync()` → `TrySilentSignInAsync()` flow
+- If silent sign-in succeeds: sets Idle and triggers sync; if fails: sets NotSignedIn
+- If no previous session: sets NotSignedIn immediately (no sign-in attempt)
+- No popup or interactive prompt — uses `TrySilentSignInAsync()` which calls `requestAccessToken({ prompt: '' })`
+- Files changed: `src/TurdTracker/Services/SyncService.cs`
+- **Learnings for future iterations:**
+  - The existing `IsSignedInAsync()` check is kept as the first branch — covers the case where a token is already in memory (e.g., navigating back without a full page reload)
+  - The `HasPreviousSessionAsync()` → `TrySilentSignInAsync()` path only runs when there's no current token but the user previously signed in
+  - No changes needed to JS or interface — all building blocks were already in place from US-001 and US-002
+---
