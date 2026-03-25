@@ -10,89 +10,20 @@
 - Build from repo root: `DOTNET_CLI_USE_MSBUILD_SERVER=0 dotnet build src/TurdTracker/TurdTracker.csproj`
 - DiaryService uses LocalStorage key "diary-entries"
 - DI registration pattern: `builder.Services.AddScoped<IService, Service>()` in Program.cs
-- Page injection pattern: `@using TurdTracker.Services` + `@inject IDiaryService DiaryService`
 - `_Imports.razor` has global `@using TurdTracker.Services` — no per-page using needed
-- MudBlazor v9 MUD0002 warning: avoid HTML attributes like `Title` on MudBlazor components; use MudBlazor-specific props
-- Client ID for Google OAuth: 101133685796-p43f4uqejgt9lgce4lvibrnoam8oegb1.apps.googleusercontent.com
-- SyncService subscribes to `DiaryService.OnDataChanged` with 2-second debounce; temporarily unsubscribes during `ReplaceAllAsync` to avoid sync loops
-- SyncService handles 412 (re-download + re-merge + retry up to 3x) and 401 (silent re-auth) automatically
-- Inject `ISyncService` for sync operations; call `InitializeAsync()` on app startup
-- DiaryService internal reads use private `GetAllRawAsync()` (unfiltered); public `GetAllAsync()` filters soft-deleted entries
-- `OnDataChanged` event pattern: fire after `SaveAsync()` in mutating methods (Add, Update, Delete)
-- JS interop files live in `wwwroot/js/`; call from C# via `IJSRuntime.InvokeAsync("googleAuth.method", args)` (no `window.` prefix)
-- GoogleAuthService wraps JS interop; inject `IGoogleAuthService` for auth operations
-- GoogleDriveService uses HttpClient with Bearer token; inject `IGoogleDriveService` for Drive file operations
-- Google Drive API: files endpoint at `https://www.googleapis.com/drive/v3/files`, upload at `https://www.googleapis.com/upload/drive/v3/files`
-- Sync file name: `turdtracker-sync.json` stored in `appDataFolder` space
-- MergeEngine is static — call `MergeEngine.Merge(local, remote)` and check `MergeResult.LocalChanged`/`RemoteChanged` to decide what to save/upload
-- MainLayout.razor: sync icon is between MudSpacer and theme toggle; uses `@implements IDisposable` to clean up event subscriptions
 - Use `InvokeAsync(StateHasChanged)` when handling events from services (not on Blazor sync context)
-- MudBlazor v9.2.0 does not have `Icons.Material.Filled.Google` — use `Icons.Material.Filled.Cloud` as alternative
-- OnDataMerged event: SyncService fires this after ReplaceAllAsync when localChanged is true — pages subscribe to refresh their data without triggering sync loops
+- MergeEngine is static — call `MergeEngine.Merge(local, remote)` directly
+- SyncService subscribes to DiaryService.OnDataChanged with 2-second debounce
+- SyncService handles 412 (re-download + re-merge + retry up to 3x) and 401 (silent re-auth) automatically
+- OnDataMerged event: SyncService fires this after ReplaceAllAsync when localChanged is true
+- JS interop: `IJSRuntime.InvokeAsync("googleAuth.method", args)` — no `window.` prefix
+- Google Drive API: files at `https://www.googleapis.com/drive/v3/files`, upload at `https://www.googleapis.com/upload/drive/v3/files`
+- Hand-rolled fakes only — no Moq, NSubstitute, or any mocking framework
+- Test project at tests/TurdTracker.Tests/ using xUnit + bUnit + FluentAssertions
+- Fakes go in tests/TurdTracker.Tests/Fakes/ folder
+- Use bUnit's built-in JSInterop for JS call verification (not hand-rolled IJSRuntime fake)
+- FakeLocalStorageService backed by Dictionary<string, object>
+- Test file naming: {ClassUnderTest}Tests.cs in mirrored folder structure
+- Run tests: `dotnet test tests/TurdTracker.Tests/TurdTracker.Tests.csproj`
 
----
-
-## 2026-03-25 - US-006
-- Added snackbar notification in MainLayout.razor when SyncService.OnDataMerged fires
-- Subscribed to OnDataMerged in OnAfterRenderAsync (alongside existing OnSyncStatusChanged subscription)
-- Snackbar shows "Sync complete — new entries loaded" with Severity.Info, auto-dismisses after 3 seconds
-- Unsubscribes from OnDataMerged in Dispose()
-- Files changed: Layout/MainLayout.razor
-- **Learnings for future iterations:**
-  - MainLayout already had ISnackbar injected and IDisposable implemented — only needed to add subscription and handler
-  - MudBlazor Snackbar config uses `VisibleStateDuration` (in ms) to control auto-dismiss timing
-  - OnDataMerged only fires when LocalChanged is true, so no extra guard needed to avoid showing snackbar on no-op syncs
----
-
-## 2026-03-25 - US-005
-- Subscribed Export.razor to SyncService.OnDataMerged to re-fetch entries and reapply date filter after sync
-- Added `@inject ISyncService SyncService`, `@implements IDisposable`, `OnDataMerged()` handler, and `Dispose()` method
-- Uses `async void OnDataMerged()` with `await InvokeAsync(StateHasChanged)` for thread-safe UI update
-- Files changed: Pages/Export.razor
-- **Learnings for future iterations:**
-  - Export.razor did not previously implement IDisposable — needed to add both directives
-  - The OnDataMerged handler must call ApplyFilter() after re-fetching entries to maintain any active date range filter
-  - Same established pattern as all other pages: subscribe in OnInitializedAsync, async void handler, unsubscribe in Dispose()
----
-
-## 2026-03-25 - US-004
-- Subscribed Stats.razor to SyncService.OnDataMerged to re-fetch entries and rebuild all three charts (frequency, Bristol distribution, time of day) after sync
-- Added `@inject ISyncService SyncService`, `@implements IDisposable`, `OnDataMerged()` handler, and `Dispose()` method
-- Uses `async void OnDataMerged()` with `await InvokeAsync(StateHasChanged)` for thread-safe UI update
-- Files changed: Pages/Stats.razor
-- **Learnings for future iterations:**
-  - Stats.razor did not previously implement IDisposable — needed to add both directives
-  - The OnDataMerged handler must rebuild all three charts (BuildFrequencyChart, BuildBristolDistribution, BuildTimeOfDayChart) not just re-fetch entries
-  - Same established pattern: subscribe in OnInitializedAsync, async void handler, unsubscribe in Dispose()
----
-
-## 2026-03-25 - US-003
-- Subscribed Calendar.razor to SyncService.OnDataMerged to re-fetch entries and rebuild _entriesByDate dictionary after sync
-- Added `@inject ISyncService SyncService`, `@implements IDisposable`, `OnDataMerged()` handler, and `Dispose()` method
-- Uses `async void OnDataMerged()` with `await InvokeAsync(StateHasChanged)` for thread-safe UI update
-- Files changed: Pages/Calendar.razor
-- **Learnings for future iterations:**
-  - Calendar.razor did not previously implement IDisposable — needed to add both `@implements IDisposable` and `@inject ISyncService SyncService`
-  - The OnDataMerged handler must rebuild _entriesByDate dictionary (not just _entries) since the calendar uses grouped data
-  - Same pattern as Home.razor: subscribe in OnInitializedAsync, async void handler, unsubscribe in Dispose()
----
-
-## 2026-03-25 - US-002
-- Subscribed Home.razor to SyncService.OnDataMerged to re-fetch and re-render entries after sync
-- Added `@implements IDisposable` and `Dispose()` to unsubscribe from OnDataMerged
-- Uses `async void OnDataMerged()` with `InvokeAsync(StateHasChanged)` for thread-safe UI update
-- Files changed: Pages/Home.razor
-- **Learnings for future iterations:**
-  - Home.razor did not previously implement IDisposable — needed to add `@implements IDisposable` directive
-  - Pattern for all page subscriptions: subscribe in OnInitializedAsync, use `async void` handler with `await InvokeAsync(StateHasChanged)`, unsubscribe in Dispose()
-  - Re-fetch uses same ordering as initial load: `OrderByDescending(e => e.Timestamp)`
----
-
-## 2026-03-25 - US-001
-- Added `event Action? OnDataMerged` to ISyncService interface and SyncService implementation
-- OnDataMerged fires after ReplaceAllAsync completes and OnDataChanged re-subscription is restored, only when LocalChanged is true
-- Files changed: Services/ISyncService.cs, Services/SyncService.cs
-- **Learnings for future iterations:**
-  - The OnDataMerged event is placed after the try/finally block inside the `if (result.LocalChanged)` guard — this ensures the OnDataChanged handler is re-subscribed before pages get notified
-  - Pages should use `InvokeAsync(StateHasChanged)` when handling OnDataMerged since it fires from the sync context
 ---

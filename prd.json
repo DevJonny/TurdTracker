@@ -1,101 +1,372 @@
 {
   "project": "TurdTracker",
-  "branchName": "ralph/sync-ui-refresh",
-  "description": "Sync UI Refresh — Pages don't update after sync downloads new data from Google Drive. Add OnDataMerged event and page subscriptions so synced entries appear without manual refresh. Add status notification for sync completion.",
+  "branchName": "ralph/test-suite",
+  "description": "Comprehensive test suite — xUnit + bUnit with hand-rolled fakes. Unit tests for all services, component tests for all pages and shared components, plus GitHub Actions CI workflow.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add OnDataMerged event to SyncService",
-      "description": "As a developer, I need SyncService to fire an event when sync has downloaded and saved new entries locally, so pages can subscribe and refresh their data.",
+      "title": "Create test project and CI workflow",
+      "description": "As a developer, I need a test project with the right dependencies and a CI workflow so tests run automatically on PRs.",
       "acceptanceCriteria": [
-        "ISyncService exposes 'event Action? OnDataMerged'",
-        "SyncService fires OnDataMerged after ReplaceAllAsync() completes, only when MergeResult.LocalChanged is true",
-        "OnDataMerged fires AFTER OnDataChanged re-subscription is restored in the finally block",
-        "OnDataMerged is NOT fired when sync finds no local changes needed",
+        "New xUnit test project at tests/TurdTracker.Tests/TurdTracker.Tests.csproj",
+        "References: xUnit, bUnit, FluentAssertions, Blazored.LocalStorage, MudBlazor (no mocking framework)",
+        "Project references src/TurdTracker/TurdTracker.csproj",
+        "dotnet test runs successfully with zero tests (project compiles)",
+        "GitHub Actions workflow at .github/workflows/test.yml triggers on PRs to main",
+        "Workflow runs dotnet test and fails the PR check if any test fails",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Home page refreshes entries after sync merge",
-      "description": "As a user, I want the Home page to automatically show new entries from other devices after sync completes, so I don't have to refresh the page.",
+      "title": "Hand-rolled fakes for all service interfaces",
+      "description": "As a developer, I need reusable fake implementations of all service interfaces so tests don't depend on real localStorage, HTTP, or JS interop.",
       "acceptanceCriteria": [
-        "Home.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
-        "On merge event, re-fetches entries via DiaryService.GetAllAsync() and updates the displayed list with the same ordering",
-        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
-        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "FakeLocalStorageService in tests/TurdTracker.Tests/Fakes/ implementing ILocalStorageService backed by Dictionary<string, object>",
+        "FakeDiaryService implementing IDiaryService with in-memory List<DiaryEntry>, tracks OnDataChanged subscribers, records method calls",
+        "FakeGoogleAuthService implementing IGoogleAuthService with configurable return values for IsSignedInAsync, GetAccessTokenAsync, SignInAsync, TrySilentSignInAsync",
+        "FakeGoogleDriveService implementing IGoogleDriveService with configurable return values and ability to throw HttpRequestException with specific status codes",
+        "FakeSyncService implementing ISyncService with settable SyncStatus, LastError, LastSyncedUtc, and invocable OnSyncStatusChanged/OnDataMerged events",
+        "FakeThemeService implementing IThemeService with in-memory dark mode state",
+        "FakeHttpMessageHandler extending HttpMessageHandler with configurable responses per URL pattern",
+        "All fakes compile and are usable in test classes",
+        "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Calendar page refreshes after sync merge",
-      "description": "As a user, I want the Calendar page to show synced entries without a page refresh.",
+      "title": "MergeEngine unit tests",
+      "description": "As a developer, I want comprehensive tests for the merge engine so that conflict resolution logic is verified.",
       "acceptanceCriteria": [
-        "Calendar.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
-        "On merge event, re-fetches diary entries and re-renders calendar data",
-        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
-        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Test: empty local + empty remote → empty result, no changes flagged",
+        "Test: local-only entries → merged list contains them, remoteChanged=true",
+        "Test: remote-only entries → merged list contains them, localChanged=true",
+        "Test: both have same entry, local newer → local wins, remoteChanged=true",
+        "Test: both have same entry, remote newer → remote wins, localChanged=true",
+        "Test: both have same entry, equal LastModified → local wins (tie-break), remoteChanged=true",
+        "Test: soft-deleted entry older than 90 days → purged from result, both changed flags true",
+        "Test: soft-deleted entry younger than 90 days → kept in result",
+        "Test: mix of local-only, remote-only, conflicts → all resolved correctly",
+        "All tests pass",
+        "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Stats page refreshes after sync merge",
-      "description": "As a user, I want the Stats page to reflect synced data without a page refresh.",
+      "title": "DiaryService unit tests",
+      "description": "As a developer, I want tests for DiaryService CRUD operations, soft-delete, and event firing.",
       "acceptanceCriteria": [
-        "Stats.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
-        "On merge event, re-computes statistics from updated data",
-        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
-        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Test: AddAsync stores entry, sets LastModified to UtcNow, fires OnDataChanged",
+        "Test: GetAllAsync filters out IsDeleted entries",
+        "Test: GetAllIncludingDeletedAsync returns all entries including deleted",
+        "Test: GetByIdAsync returns correct entry or null",
+        "Test: GetByDateAsync returns entries matching the date",
+        "Test: UpdateAsync updates entry, sets LastModified, fires OnDataChanged",
+        "Test: UpdateAsync with non-existent ID does not fire OnDataChanged",
+        "Test: DeleteAsync sets IsDeleted=true and LastModified, fires OnDataChanged",
+        "Test: ReplaceAllAsync replaces all entries, does NOT fire OnDataChanged",
+        "Test: BackfillLastModifiedIfNeeded migrates entries with default(DateTime) LastModified",
+        "Uses FakeLocalStorageService from US-002",
+        "All tests pass",
+        "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Export page refreshes after sync merge",
-      "description": "As a user, I want the Export page to include synced entries without a page refresh.",
+      "title": "ThemeService unit tests",
+      "description": "As a developer, I want tests for ThemeService to verify localStorage read/write and default behavior.",
       "acceptanceCriteria": [
-        "Export.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
-        "On merge event, re-fetches entry data",
-        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
-        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Test: GetIsDarkModeAsync returns true when localStorage has no value (default)",
+        "Test: GetIsDarkModeAsync returns stored value when present",
+        "Test: SetIsDarkModeAsync writes to localStorage",
+        "Uses FakeLocalStorageService from US-002",
+        "All tests pass",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Show snackbar notification when sync downloads new data",
-      "description": "As a user, I want to see a brief notification when sync has pulled new data so I know my app is up to date across devices.",
+      "title": "GoogleAuthService unit tests",
+      "description": "As a developer, I want tests for GoogleAuthService to verify initialization, sign-in/out, and token management.",
       "acceptanceCriteria": [
-        "MainLayout.razor subscribes to SyncService.OnDataMerged",
-        "On merge event, shows a MudBlazor snackbar with message like 'Sync complete — new entries loaded'",
-        "Snackbar auto-dismisses after 3 seconds",
-        "Normal syncs with no new data do NOT show this snackbar (only OnDataMerged triggers it)",
-        "Unsubscribes from OnDataMerged in Dispose()",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Test: InitializeAsync calls JS googleAuth.initialize once (idempotent)",
+        "Test: SignInAsync calls EnsureInitializedAsync then JS googleAuth.signIn",
+        "Test: SignOutAsync calls JS googleAuth.signOut",
+        "Test: IsSignedInAsync calls EnsureInitializedAsync then JS googleAuth.isSignedIn",
+        "Test: GetAccessTokenAsync returns token from JS",
+        "Test: TrySilentSignInAsync returns true when token obtained, false otherwise",
+        "Uses bUnit's built-in JSInterop for JS call verification",
+        "All tests pass",
+        "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "GoogleDriveService unit tests",
+      "description": "As a developer, I want tests for GoogleDriveService to verify Drive API interactions.",
+      "acceptanceCriteria": [
+        "Test: FindSyncFileAsync returns (fileId, etag) when file exists",
+        "Test: FindSyncFileAsync returns (null, null) when no file found",
+        "Test: DownloadSyncFileAsync deserializes SyncEnvelope correctly",
+        "Test: UploadSyncFileAsync creates new file when fileId is null",
+        "Test: UploadSyncFileAsync updates existing file with If-Match etag header",
+        "Test: UploadSyncFileAsync throws HttpRequestException on 412 conflict",
+        "Uses FakeHttpMessageHandler and FakeGoogleAuthService from US-002",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "SyncService unit tests — happy path and state machine",
+      "description": "As a developer, I want tests for the SyncService sync flow and status transitions.",
+      "acceptanceCriteria": [
+        "Test: InitializeAsync with signed-in user → triggers SyncAsync, status transitions to Synced",
+        "Test: InitializeAsync with no previous session → status stays NotSignedIn",
+        "Test: SyncAsync when not signed in → sets NotSignedIn status",
+        "Test: SyncAsync happy path → Syncing → Synced, sets LastSyncedUtc",
+        "Test: SyncAsync guard — concurrent call returns immediately (no double-sync)",
+        "Test: SyncAsync with LocalChanged → calls ReplaceAllAsync, fires OnDataMerged",
+        "Test: SyncAsync with RemoteChanged → calls UploadSyncFileAsync",
+        "Test: OnDataMerged subscriber exception does not fail sync",
+        "Uses FakeDiaryService, FakeGoogleAuthService, FakeGoogleDriveService from US-002",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "SyncService unit tests — error handling and retry",
+      "description": "As a developer, I want tests for SyncService error paths, retry logic, and debounce.",
+      "acceptanceCriteria": [
+        "Test: 412 conflict → retries with re-download and re-merge (up to 3 times)",
+        "Test: 401 unauthorized → attempts silent re-auth and retries",
+        "Test: Network error (StatusCode=null) → reverts to previous status, no error shown",
+        "Test: Real HTTP error (e.g. 500) → sets SyncStatus=Error, captures LastError",
+        "Test: General exception → sets SyncStatus=Error, captures LastError",
+        "Test: LastError cleared at start of each SyncAsync call",
+        "Test: Debounce cancels previous pending sync when new change arrives",
+        "Test: OnDataChanged unsubscribe/resubscribe around ReplaceAllAsync is guaranteed (even on exception)",
+        "Test: Dispose cancels and disposes debounce CTS",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "BristolScaleSelector component tests",
+      "description": "As a developer, I want tests for the BristolScaleSelector component to verify rendering and selection.",
+      "acceptanceCriteria": [
+        "Test: Renders all 7 Bristol type cards with correct names",
+        "Test: Selected type card has bristol-card-selected class",
+        "Test: Clicking a card invokes SelectedTypeChanged callback with correct value",
+        "Test: No card selected when SelectedType=0",
+        "bUnit test context with MudBlazor services registered",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "TagInput component tests",
+      "description": "As a developer, I want tests for the TagInput component to verify tag add/remove and recent tags.",
+      "acceptanceCriteria": [
+        "Test: Adding a tag via Enter key invokes TagsChanged callback",
+        "Test: Duplicate tag (case-insensitive) is not added",
+        "Test: Removing a tag invokes TagsChanged callback",
+        "Test: Text field cleared after adding a tag",
+        "Test: Recent tags loaded from DiaryService on init (top 10, deduped, excluding current)",
+        "Uses FakeDiaryService from US-002",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Home page component tests",
+      "description": "As a developer, I want tests for the Home page to verify entry display, navigation, and sync banner.",
+      "acceptanceCriteria": [
+        "Test: Empty entries shows 'No entries yet' message and 'Log Entry' button",
+        "Test: Entries rendered as cards with Bristol type, timestamp, truncated notes (80 chars), tags",
+        "Test: Clicking entry card navigates to /entry/{Id}",
+        "Test: Sync banner shown when not signed in and not dismissed",
+        "Test: Sync banner hidden when signed in",
+        "Test: Sync banner hidden when previously dismissed",
+        "Test: Subscribes to OnDataMerged and refreshes entries on event",
+        "Test: Disposes OnDataMerged subscription",
+        "Uses FakeDiaryService, FakeGoogleAuthService, FakeSyncService, FakeLocalStorageService from US-002",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Calendar page component tests",
+      "description": "As a developer, I want tests for the Calendar page to verify month navigation, date selection, and entry display.",
+      "acceptanceCriteria": [
+        "Test: Calendar grid shows correct number of days for current month",
+        "Test: Day-of-week offset is correct (Monday start)",
+        "Test: Entry count badges shown on dates with entries",
+        "Test: Clicking a date selects it and shows entries for that day",
+        "Test: Previous/next month buttons navigate months",
+        "Test: Empty selected date shows 'No entries for this day'",
+        "Test: Subscribes to OnDataMerged and refreshes on event",
+        "Uses FakeDiaryService, FakeSyncService from US-002",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Stats page component tests",
+      "description": "As a developer, I want tests for the Stats page to verify chart data computation.",
+      "acceptanceCriteria": [
+        "Test: Frequency chart computes correct daily counts for 7-day range",
+        "Test: Bristol distribution chart tallies types 1-7 correctly",
+        "Test: Time of day chart buckets entries by hour (0-23)",
+        "Test: Time range chip selection (7/30/90 days) rebuilds frequency chart",
+        "Test: Empty data renders without errors",
+        "Test: Subscribes to OnDataMerged and rebuilds charts on event",
+        "Uses FakeDiaryService, FakeSyncService from US-002",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Log page component tests",
+      "description": "As a developer, I want tests for the Log page to verify entry creation and validation.",
+      "acceptanceCriteria": [
+        "Test: Save with BristolType=0 shows validation error, does not call AddAsync",
+        "Test: Save with valid data calls AddAsync with correct entry and navigates to /",
+        "Test: Entry timestamp combines selected date and time",
+        "Test: Cancel button navigates to /",
+        "Uses FakeDiaryService from US-002; bUnit's FakeNavigationManager",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "EntryDetail page component tests",
+      "description": "As a developer, I want tests for the EntryDetail page to verify view, edit, and delete flows.",
+      "acceptanceCriteria": [
+        "Test: Loads and displays entry by ID (Bristol type, timestamp, notes, tags)",
+        "Test: Entry not found shows error message",
+        "Test: Edit button toggles to edit form with pre-populated fields",
+        "Test: Save in edit mode calls UpdateAsync and exits edit mode",
+        "Test: Cancel in edit mode exits without saving",
+        "Test: Delete shows confirmation dialog; confirming calls DeleteAsync and navigates to /",
+        "Uses FakeDiaryService from US-002; bUnit's FakeNavigationManager; hand-rolled FakeDialogService or MudBlazor's built-in test dialog provider",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Settings page component tests",
+      "description": "As a developer, I want tests for the Settings page to verify auth flows and sync controls.",
+      "acceptanceCriteria": [
+        "Test: Sign in button calls SignInAsync, on success sets signed-in state and calls SyncAsync",
+        "Test: Sign out button calls SignOutAsync then SyncAsync",
+        "Test: Sync Now button calls SyncAsync",
+        "Test: Buttons disabled while SyncStatus == Syncing",
+        "Test: Sync status text and icon reflect current SyncStatus",
+        "Test: LastSyncedUtc displayed when available",
+        "Uses FakeGoogleAuthService, FakeSyncService, FakeThemeService from US-002",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Export page component tests",
+      "description": "As a developer, I want tests for the Export page to verify date filtering and export trigger.",
+      "acceptanceCriteria": [
+        "Test: All entries shown when no date filter applied",
+        "Test: Start date filter excludes entries before that date",
+        "Test: End date filter excludes entries after that date",
+        "Test: Both filters combined works correctly",
+        "Test: Export button calls window.print via JS interop",
+        "Test: Subscribes to OnDataMerged and refreshes on event",
+        "Uses FakeDiaryService, FakeSyncService from US-002; bUnit's JSInterop",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "MainLayout component tests",
+      "description": "As a developer, I want tests for the MainLayout to verify sync icon states, theme toggle, and snackbar.",
+      "acceptanceCriteria": [
+        "Test: Sync icon is CloudDone/Success when Synced",
+        "Test: Sync icon is CloudSync/Inherit when Syncing, with spin class",
+        "Test: Sync icon is CloudOff/Error when Error",
+        "Test: Sync icon is CloudOff/Default when NotSignedIn",
+        "Test: Clicking sync icon during Error shows snackbar with LastError",
+        "Test: OnDataMerged shows 'Sync complete' snackbar only when status is Synced/Idle",
+        "Test: Theme toggle switches dark/light mode",
+        "Test: Tooltip shows status and LastSyncedUtc",
+        "Uses FakeSyncService, FakeThemeService from US-002; MudBlazor's test snackbar provider",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
       "notes": ""
     }
   ]
