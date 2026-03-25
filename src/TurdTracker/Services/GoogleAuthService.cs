@@ -25,6 +25,11 @@ public class GoogleAuthService : IGoogleAuthService
 
     public async Task InitializeAsync()
     {
+        if (_initialized)
+        {
+            return;
+        }
+
         await _jsRuntime.InvokeVoidAsync("googleAuth.initialize", ClientId);
         _initialized = true;
     }
@@ -58,7 +63,6 @@ public class GoogleAuthService : IGoogleAuthService
 
     public async Task<bool> HasPreviousSessionAsync()
     {
-        await EnsureInitializedAsync();
         return await _jsRuntime.InvokeAsync<bool>("googleAuth.hasPreviousSession");
     }
 }
