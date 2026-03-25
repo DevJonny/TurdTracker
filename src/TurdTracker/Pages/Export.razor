@@ -92,12 +92,21 @@
         _loading = false;
     }
 
-    private async void OnDataMerged()
+    private void OnDataMerged()
     {
-        var all = await DiaryService.GetAllAsync();
-        _allEntries = all.OrderByDescending(e => e.Timestamp).ToList();
-        ApplyFilter();
-        await InvokeAsync(StateHasChanged);
+        _ = HandleDataMergedAsync();
+    }
+
+    private async Task HandleDataMergedAsync()
+    {
+        try
+        {
+            var all = await DiaryService.GetAllAsync();
+            _allEntries = all.OrderByDescending(e => e.Timestamp).ToList();
+            ApplyFilter();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
     }
 
     public void Dispose()

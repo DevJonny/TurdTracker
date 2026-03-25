@@ -169,7 +169,7 @@ public class SyncService : ISyncService, IDisposable
             }
 
             // Notify pages that merged data is available for refresh
-            OnDataMerged?.Invoke();
+            try { OnDataMerged?.Invoke(); } catch { /* subscriber errors must not fail sync */ }
         }
 
         // 5. Upload if changed

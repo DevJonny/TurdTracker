@@ -99,13 +99,22 @@
         BuildTimeOfDayChart();
     }
 
-    private async void OnDataMerged()
+    private void OnDataMerged()
     {
-        _entries = await DiaryService.GetAllAsync();
-        BuildFrequencyChart();
-        BuildBristolDistribution();
-        BuildTimeOfDayChart();
-        await InvokeAsync(StateHasChanged);
+        _ = HandleDataMergedAsync();
+    }
+
+    private async Task HandleDataMergedAsync()
+    {
+        try
+        {
+            _entries = await DiaryService.GetAllAsync();
+            BuildFrequencyChart();
+            BuildBristolDistribution();
+            BuildTimeOfDayChart();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { }
     }
 
     public void Dispose()
