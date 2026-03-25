@@ -139,6 +139,6 @@
 - Files changed: `src/TurdTracker/Services/ISyncService.cs`, `src/TurdTracker/Services/SyncService.cs`, `src/TurdTracker/Layout/MainLayout.razor`
 - **Learnings for future iterations:**
   - The offline catch (`ex.StatusCode is null`) intentionally does NOT set `LastError` — offline is expected and handled silently
-  - `LastError` is cleared near the top of `SyncAsync` after the "already syncing" early-return guard, so it resets for normal sync attempts but is preserved when a call is skipped because a sync is already in progress
+  - `LastError` is cleared after both the "already syncing" and auth-check early-return guards, so it resets for normal sync attempts but is preserved when a call is skipped because a sync is already in progress
   - The snackbar in `OnSyncIconClick` only fires when clicked during Error state — `LastError` provides the detail, generic message is the fallback
 ---

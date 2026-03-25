@@ -58,15 +58,15 @@ public class SyncService : ISyncService, IDisposable
 
     public async Task SyncAsync()
     {
+        if (SyncStatus == SyncStatus.Syncing)
+            return;
+
         if (!await _authService.IsSignedInAsync())
         {
             LastError = null;
             SetStatus(SyncStatus.NotSignedIn);
             return;
         }
-
-        if (SyncStatus == SyncStatus.Syncing)
-            return;
 
         LastError = null;
         SetStatus(SyncStatus.Syncing);
@@ -185,7 +185,6 @@ public class SyncService : ISyncService, IDisposable
         // Debounce: cancel any pending sync and schedule a new one
         var previousCts = _debounceCts;
         previousCts?.Cancel();
-        previousCts?.Dispose();
         _debounceCts = new CancellationTokenSource();
         var token = _debounceCts.Token;
 
@@ -202,6 +201,10 @@ public class SyncService : ISyncService, IDisposable
             catch (TaskCanceledException)
             {
                 // Debounce cancelled — expected
+            }
+            finally
+            {
+                previousCts?.Dispose();
             }
         });
     }
