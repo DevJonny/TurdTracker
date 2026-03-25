@@ -1,7 +1,9 @@
 @page "/export"
 @using TurdTracker.Models
 @inject IDiaryService DiaryService
+@inject ISyncService SyncService
 @inject IJSRuntime JS
+@implements IDisposable
 
 <PageTitle>Export Diary</PageTitle>
 
@@ -83,10 +85,24 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnDataMerged += OnDataMerged;
         var all = await DiaryService.GetAllAsync();
         _allEntries = all.OrderByDescending(e => e.Timestamp).ToList();
         ApplyFilter();
         _loading = false;
+    }
+
+    private async void OnDataMerged()
+    {
+        var all = await DiaryService.GetAllAsync();
+        _allEntries = all.OrderByDescending(e => e.Timestamp).ToList();
+        ApplyFilter();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnDataMerged -= OnDataMerged;
     }
 
     private void ApplyFilter()
