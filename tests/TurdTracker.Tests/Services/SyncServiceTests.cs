@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http;
 using FluentAssertions;
 using TurdTracker.Models;
 using TurdTracker.Services;
@@ -233,6 +234,257 @@ public class SyncServiceTests : IDisposable
 
     #endregion
 
+    #region SyncAsync — error handling and retry
+
+    [Fact]
+    public async Task SyncAsync_412Conflict_RetriesWithRedownloadAndRemerge()
+    {
+        // Arrange: signed in, local entries to trigger upload (remoteChanged)
+        _authService.IsSignedIn = true;
+        _diaryService.SeedEntries(new DiaryEntry
+        {
+            Id = Guid.NewGuid(),
+            BristolType = 3,
+            Timestamp = DateTime.UtcNow,
+            LastModified = DateTime.UtcNow
+        });
+
+        var driveService = new ConfigurableDriveService();
+        driveService.EnqueueUploadException(
+            FakeGoogleDriveService.CreateHttpException(HttpStatusCode.PreconditionFailed));
+        // Second attempt succeeds (no exception enqueued)
+
+        using var sut = new SyncService(_diaryService, _authService, driveService);
+
+        // Act
+        await sut.SyncAsync();
+
+        // Assert: retried — FindSyncFileAsync called twice (once per attempt)
+        driveService.FindCallCount.Should().Be(2);
+        driveService.UploadCallCount.Should().Be(2);
+        sut.SyncStatus.Should().Be(SyncStatus.Synced);
+    }
+
+    [Fact]
+    public async Task SyncAsync_412Conflict_ExhaustsRetries_SetsErrorStatus()
+    {
+        // Arrange: signed in, local entries, upload always throws 412
+        _authService.IsSignedIn = true;
+        _diaryService.SeedEntries(new DiaryEntry
+        {
+            Id = Guid.NewGuid(),
+            BristolType = 3,
+            Timestamp = DateTime.UtcNow,
+            LastModified = DateTime.UtcNow
+        });
+
+        var driveService = new ConfigurableDriveService();
+        driveService.EnqueueUploadException(
+            FakeGoogleDriveService.CreateHttpException(HttpStatusCode.PreconditionFailed, "412 Conflict"));
+        driveService.EnqueueUploadException(
+            FakeGoogleDriveService.CreateHttpException(HttpStatusCode.PreconditionFailed, "412 Conflict"));
+        driveService.EnqueueUploadException(
+            FakeGoogleDriveService.CreateHttpException(HttpStatusCode.PreconditionFailed, "412 Conflict"));
+
+        using var sut = new SyncService(_diaryService, _authService, driveService);
+
+        // Act
+        await sut.SyncAsync();
+
+        // Assert: all 3 retries exhausted, error status
+        driveService.UploadCallCount.Should().Be(3);
+        sut.SyncStatus.Should().Be(SyncStatus.Error);
+        sut.LastError.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task SyncAsync_401Unauthorized_AttemptsReauthAndRetries()
+    {
+        // Arrange: signed in, local entries, upload throws 401 first time
+        _authService.IsSignedIn = true;
+        _authService.SignInResult = "new-token";
+        _diaryService.SeedEntries(new DiaryEntry
+        {
+            Id = Guid.NewGuid(),
+            BristolType = 3,
+            Timestamp = DateTime.UtcNow,
+            LastModified = DateTime.UtcNow
+        });
+
+        var driveService = new ConfigurableDriveService();
+        driveService.EnqueueUploadException(
+            FakeGoogleDriveService.CreateHttpException(HttpStatusCode.Unauthorized));
+
+        using var sut = new SyncService(_diaryService, _authService, driveService);
+
+        // Act
+        await sut.SyncAsync();
+
+        // Assert: re-auth attempted, then retry succeeded
+        _authService.MethodCalls.Should().Contain(nameof(IGoogleAuthService.SignInAsync));
+        driveService.UploadCallCount.Should().Be(2);
+        sut.SyncStatus.Should().Be(SyncStatus.Synced);
+    }
+
+    [Fact]
+    public async Task SyncAsync_NetworkError_RevertsToPreviousStatus_NoErrorShown()
+    {
+        // Arrange: do a successful sync first to establish LastSyncedUtc
+        _authService.IsSignedIn = true;
+        _driveService.FindResult = (null, null);
+        await _sut.SyncAsync();
+        _sut.SyncStatus.Should().Be(SyncStatus.Synced);
+        _sut.LastSyncedUtc.Should().NotBeNull();
+
+        // Now set up network error (null StatusCode)
+        _driveService.FindException = new HttpRequestException("Network error", null, null);
+
+        // Act
+        await _sut.SyncAsync();
+
+        // Assert: reverts to Synced (had previous sync), no error shown
+        _sut.SyncStatus.Should().Be(SyncStatus.Synced);
+        _sut.LastError.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SyncAsync_RealHttpError_SetsErrorStatusAndCapturesLastError()
+    {
+        // Arrange: signed in, 500 error
+        _authService.IsSignedIn = true;
+        _driveService.FindException = FakeGoogleDriveService.CreateHttpException(
+            HttpStatusCode.InternalServerError, "Internal Server Error");
+
+        // Act
+        await _sut.SyncAsync();
+
+        // Assert
+        _sut.SyncStatus.Should().Be(SyncStatus.Error);
+        _sut.LastError.Should().Contain("Internal Server Error");
+    }
+
+    [Fact]
+    public async Task SyncAsync_GeneralException_SetsErrorStatusAndCapturesLastError()
+    {
+        // Arrange: signed in, drive service throws non-HTTP exception
+        _authService.IsSignedIn = true;
+        var driveService = new ThrowingDriveService(new InvalidOperationException("Something broke"));
+        using var sut = new SyncService(_diaryService, _authService, driveService);
+
+        // Act
+        await sut.SyncAsync();
+
+        // Assert
+        sut.SyncStatus.Should().Be(SyncStatus.Error);
+        sut.LastError.Should().Be("Something broke");
+    }
+
+    [Fact]
+    public async Task SyncAsync_ClearsLastErrorAtStart()
+    {
+        // Arrange: first sync fails with error
+        _authService.IsSignedIn = true;
+        _driveService.FindException = FakeGoogleDriveService.CreateHttpException(
+            HttpStatusCode.InternalServerError, "Error");
+        await _sut.SyncAsync();
+        _sut.LastError.Should().NotBeNull();
+
+        // Clear exception and sync again
+        _driveService.FindException = null;
+        _driveService.FindResult = (null, null);
+
+        // Act
+        await _sut.SyncAsync();
+
+        // Assert
+        _sut.LastError.Should().BeNull();
+        _sut.SyncStatus.Should().Be(SyncStatus.Synced);
+    }
+
+    #endregion
+
+    #region Debounce and Dispose
+
+    [Fact]
+    public async Task Debounce_CancelsPreviousPendingSyncWhenNewChangeArrives()
+    {
+        // Arrange: signed in
+        _authService.IsSignedIn = true;
+        _driveService.FindResult = (null, null);
+
+        // Act: fire two data changes rapidly — first debounce should be cancelled
+        _diaryService.RaiseOnDataChanged();
+        _diaryService.RaiseOnDataChanged();
+
+        // Wait for debounce to fire (2s delay + margin)
+        await Task.Delay(3500);
+
+        // Assert: only one sync triggered (second cancels first debounce)
+        var findCalls = _driveService.MethodCalls
+            .Count(c => c == nameof(IGoogleDriveService.FindSyncFileAsync));
+        findCalls.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task OnDataChanged_ResubscribedEvenWhenReplaceAllAsyncThrows()
+    {
+        // Arrange: remote has entries → localChanged → ReplaceAllAsync will throw
+        _authService.IsSignedIn = true;
+        var remoteEntry = new DiaryEntry
+        {
+            Id = Guid.NewGuid(),
+            BristolType = 4,
+            Timestamp = DateTime.UtcNow,
+            LastModified = DateTime.UtcNow
+        };
+
+        var throwingDiary = new ThrowingOnReplaceDiaryService();
+        var driveService = new FakeGoogleDriveService
+        {
+            FindResult = ("file-1", "\"etag-1\""),
+            DownloadResult = new SyncEnvelope { Entries = [remoteEntry] }
+        };
+        using var sut = new SyncService(throwingDiary, _authService, driveService);
+
+        // Act: sync fails on ReplaceAllAsync
+        await sut.SyncAsync();
+        sut.SyncStatus.Should().Be(SyncStatus.Error);
+
+        // Verify OnDataChanged is still subscribed by triggering another sync via event
+        driveService.FindResult = (null, null);
+        driveService.DownloadResult = null;
+        throwingDiary.ShouldThrow = false;
+        throwingDiary.RaiseOnDataChanged();
+        await Task.Delay(3500);
+
+        // If re-subscribed, a second sync attempt occurred
+        driveService.MethodCalls
+            .Count(c => c == nameof(IGoogleDriveService.FindSyncFileAsync))
+            .Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    [Fact]
+    public async Task Dispose_CancelsAndDisposesDebounce()
+    {
+        // Arrange: use a separate SyncService to avoid double-dispose from class-level Dispose
+        var authService = new FakeGoogleAuthService { IsSignedIn = true };
+        var driveService = new FakeGoogleDriveService { FindResult = (null, null) };
+        var diaryService = new FakeDiaryService();
+        var sut = new SyncService(diaryService, authService, driveService);
+
+        // Act: trigger debounce then immediately dispose
+        diaryService.RaiseOnDataChanged();
+        sut.Dispose();
+
+        // Wait for what would have been the debounce window
+        await Task.Delay(3500);
+
+        // Assert: no sync happened (debounce was cancelled by Dispose)
+        driveService.MethodCalls.Should().NotContain(nameof(IGoogleDriveService.FindSyncFileAsync));
+    }
+
+    #endregion
+
     /// <summary>
     /// Helper fake that switches IsSignedIn to true after TrySilentSignInAsync is called.
     /// </summary>
@@ -310,5 +562,92 @@ public class SyncServiceTests : IDisposable
 
         public Task<(string FileId, string ETag)> UploadSyncFileAsync(SyncEnvelope envelope, string? existingFileId, string? etag) =>
             Task.FromResult(("file-1", "\"etag-1\""));
+    }
+
+    /// <summary>
+    /// Drive service with a queue of upload exceptions — dequeues one per call, succeeds when empty.
+    /// </summary>
+    private class ConfigurableDriveService : IGoogleDriveService
+    {
+        private readonly Queue<Exception> _uploadExceptions = new();
+        public int FindCallCount { get; private set; }
+        public int UploadCallCount { get; private set; }
+
+        public void EnqueueUploadException(Exception ex) => _uploadExceptions.Enqueue(ex);
+
+        public Task<(string? FileId, string? ETag)> FindSyncFileAsync()
+        {
+            FindCallCount++;
+            return Task.FromResult<(string?, string?)>((null, null));
+        }
+
+        public Task<SyncEnvelope?> DownloadSyncFileAsync(string fileId) =>
+            Task.FromResult<SyncEnvelope?>(null);
+
+        public Task<(string FileId, string ETag)> UploadSyncFileAsync(
+            SyncEnvelope envelope, string? existingFileId, string? etag)
+        {
+            UploadCallCount++;
+            if (_uploadExceptions.Count > 0)
+                throw _uploadExceptions.Dequeue();
+            return Task.FromResult(("file-1", "\"etag-1\""));
+        }
+    }
+
+    /// <summary>
+    /// Drive service that always throws a given exception on any method call.
+    /// </summary>
+    private class ThrowingDriveService : IGoogleDriveService
+    {
+        private readonly Exception _exception;
+        public ThrowingDriveService(Exception exception) => _exception = exception;
+
+        public Task<(string? FileId, string? ETag)> FindSyncFileAsync() => throw _exception;
+        public Task<SyncEnvelope?> DownloadSyncFileAsync(string fileId) => throw _exception;
+        public Task<(string FileId, string ETag)> UploadSyncFileAsync(
+            SyncEnvelope envelope, string? existingFileId, string? etag) => throw _exception;
+    }
+
+    /// <summary>
+    /// Diary service that throws on ReplaceAllAsync when ShouldThrow is true.
+    /// Used to verify OnDataChanged re-subscription in the finally block.
+    /// </summary>
+    private class ThrowingOnReplaceDiaryService : IDiaryService
+    {
+        private readonly List<DiaryEntry> _entries = [];
+        public bool ShouldThrow { get; set; } = true;
+        public event Action? OnDataChanged;
+
+        public Task<List<DiaryEntry>> GetAllAsync() =>
+            Task.FromResult(_entries.Where(e => !e.IsDeleted).ToList());
+
+        public Task<List<DiaryEntry>> GetAllIncludingDeletedAsync() =>
+            Task.FromResult(_entries.ToList());
+
+        public Task<DiaryEntry?> GetByIdAsync(Guid id) =>
+            Task.FromResult(_entries.FirstOrDefault(e => e.Id == id));
+
+        public Task<List<DiaryEntry>> GetByDateAsync(DateTime date) =>
+            Task.FromResult(_entries.Where(e => e.Timestamp.Date == date.Date).ToList());
+
+        public Task AddAsync(DiaryEntry entry)
+        {
+            _entries.Add(entry);
+            OnDataChanged?.Invoke();
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(DiaryEntry entry) => Task.CompletedTask;
+        public Task DeleteAsync(Guid id) => Task.CompletedTask;
+
+        public Task ReplaceAllAsync(List<DiaryEntry> entries)
+        {
+            if (ShouldThrow) throw new InvalidOperationException("ReplaceAll failed");
+            _entries.Clear();
+            _entries.AddRange(entries);
+            return Task.CompletedTask;
+        }
+
+        public void RaiseOnDataChanged() => OnDataChanged?.Invoke();
     }
 }
