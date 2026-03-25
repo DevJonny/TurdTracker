@@ -2,6 +2,8 @@
 @using TurdTracker.Models
 @using MudBlazor.Charts
 @inject IDiaryService DiaryService
+@inject ISyncService SyncService
+@implements IDisposable
 
 <PageTitle>Stats</PageTitle>
 
@@ -90,10 +92,25 @@
 
     protected override async Task OnInitializedAsync()
     {
+        SyncService.OnDataMerged += OnDataMerged;
         _entries = await DiaryService.GetAllAsync();
         BuildFrequencyChart();
         BuildBristolDistribution();
         BuildTimeOfDayChart();
+    }
+
+    private async void OnDataMerged()
+    {
+        _entries = await DiaryService.GetAllAsync();
+        BuildFrequencyChart();
+        BuildBristolDistribution();
+        BuildTimeOfDayChart();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SyncService.OnDataMerged -= OnDataMerged;
     }
 
     private void BuildBristolDistribution()
