@@ -89,6 +89,7 @@
         {
             _isDarkMode = await ThemeService.GetIsDarkModeAsync();
             SyncService.OnSyncStatusChanged += OnSyncStatusChanged;
+            SyncService.OnDataMerged += OnDataMerged;
             await SyncService.InitializeAsync();
             StateHasChanged();
         }
@@ -108,6 +109,14 @@
     private void OnSyncStatusChanged()
     {
         InvokeAsync(StateHasChanged);
+    }
+
+    private void OnDataMerged()
+    {
+        InvokeAsync(() => Snackbar.Add("Sync complete — new entries loaded", Severity.Info, config =>
+        {
+            config.VisibleStateDuration = 3000;
+        }));
     }
 
     private string GetSyncIcon() => SyncService.SyncStatus switch
@@ -162,6 +171,7 @@
     public void Dispose()
     {
         SyncService.OnSyncStatusChanged -= OnSyncStatusChanged;
+        SyncService.OnDataMerged -= OnDataMerged;
     }
 
     private Color GetNavColor(string href)
