@@ -16,5 +16,6 @@ public interface ISyncService
     string? LastError { get; }
     DateTime? LastSyncedUtc { get; }
     event Action? OnSyncStatusChanged;
+    event Action? OnDataMerged;
     Task InitializeAsync();
 }
