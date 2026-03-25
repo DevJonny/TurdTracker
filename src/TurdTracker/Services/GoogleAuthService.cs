@@ -7,11 +7,29 @@ public class GoogleAuthService : IGoogleAuthService
     private const string ClientId = "101133685796-p43f4uqejgt9lgce4lvibrnoam8oegb1.apps.googleusercontent.com";
 
     private readonly IJSRuntime _jsRuntime;
+    private readonly SemaphoreSlim _initLock = new(1, 1);
     private bool _initialized;
 
     public GoogleAuthService(IJSRuntime jsRuntime)
     {
         _jsRuntime = jsRuntime;
+    }
+
+    public async Task InitializeAsync()
+    {
+        if (_initialized) return;
+
+        await _initLock.WaitAsync();
+        try
+        {
+            if (_initialized) return;
+            await _jsRuntime.InvokeVoidAsync("googleAuth.initialize", ClientId);
+            _initialized = true;
+        }
+        finally
+        {
+            _initLock.Release();
+        }
     }
 
     private async Task EnsureInitializedAsync()
@@ -20,13 +38,6 @@ public class GoogleAuthService : IGoogleAuthService
         {
             await InitializeAsync();
         }
-    }
-
-    public async Task InitializeAsync()
-    {
-        if (_initialized) return;
-        await _jsRuntime.InvokeVoidAsync("googleAuth.initialize", ClientId);
-        _initialized = true;
     }
 
     public async Task<string?> SignInAsync()

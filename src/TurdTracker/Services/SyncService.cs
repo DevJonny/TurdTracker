@@ -58,17 +58,17 @@ public class SyncService : ISyncService, IDisposable
 
     public async Task SyncAsync()
     {
-        if (SyncStatus == SyncStatus.Syncing)
-            return;
-
-        LastError = null;
-
         if (!await _authService.IsSignedInAsync())
         {
+            LastError = null;
             SetStatus(SyncStatus.NotSignedIn);
             return;
         }
 
+        if (SyncStatus == SyncStatus.Syncing)
+            return;
+
+        LastError = null;
         SetStatus(SyncStatus.Syncing);
 
         try
