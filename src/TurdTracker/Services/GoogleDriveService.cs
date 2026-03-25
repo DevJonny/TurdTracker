@@ -26,10 +26,10 @@ public class GoogleDriveService : IGoogleDriveService
         var token = await GetAuthTokenAsync();
 
         var url = $"{DriveApiBase}/files?spaces=appDataFolder&q=name%3D'{SyncFileName}'&fields=files(id,etag)";
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await _httpClient.SendAsync(request);
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<FileListResponse>();
@@ -43,10 +43,10 @@ public class GoogleDriveService : IGoogleDriveService
         var token = await GetAuthTokenAsync();
 
         var url = $"{DriveApiBase}/files/{fileId}?alt=media";
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await _httpClient.SendAsync(request);
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         return await response.Content.ReadFromJsonAsync<SyncEnvelope>();
@@ -73,7 +73,7 @@ public class GoogleDriveService : IGoogleDriveService
         var metadata = new { name = SyncFileName, parents = new[] { "appDataFolder" } };
         var metadataJson = JsonSerializer.Serialize(metadata);
 
-        var multipartContent = new MultipartContent("related");
+        using var multipartContent = new MultipartContent("related");
         var metadataPart = new StringContent(metadataJson, System.Text.Encoding.UTF8, "application/json");
         var filePart = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
 
@@ -81,13 +81,13 @@ public class GoogleDriveService : IGoogleDriveService
         multipartContent.Add(filePart);
 
         var url = $"{DriveUploadBase}/files?uploadType=multipart&fields=id,etag";
-        var request = new HttpRequestMessage(HttpMethod.Post, url)
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = multipartContent
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await _httpClient.SendAsync(request);
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<FileResponse>();
@@ -99,7 +99,7 @@ public class GoogleDriveService : IGoogleDriveService
         var token = await GetAuthTokenAsync();
 
         var url = $"{DriveUploadBase}/files/{fileId}?uploadType=media&fields=id,etag";
-        var request = new HttpRequestMessage(HttpMethod.Patch, url)
+        using var request = new HttpRequestMessage(HttpMethod.Patch, url)
         {
             Content = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json")
         };
@@ -110,7 +110,7 @@ public class GoogleDriveService : IGoogleDriveService
             request.Headers.Add("If-Match", etag);
         }
 
-        var response = await _httpClient.SendAsync(request);
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<FileResponse>();
