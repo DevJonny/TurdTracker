@@ -1,0 +1,144 @@
+## Codebase Patterns
+- Build command: `DOTNET_CLI_USE_MSBUILD_SERVER=0 DOTNET_HOST_PATH=$(which dotnet) dotnet build` (required on macOS ARM64 to avoid task host error)
+- `wasm-tools` workload must be installed (`dotnet workload install wasm-tools`) — without it, ComputeWasmBuildAssets fails with MSB4216
+- Build with sandbox disabled for NuGet restore (network access required)
+- Project source lives in `src/TurdTracker/`
+- MudBlazor v9.2.0 configured with providers in MainLayout.razor
+- Blazored.LocalStorage v4.5.0 (must specify version explicitly; latest search fails on .NET 10)
+- Folder structure: Pages/, Components/, Models/, Services/ under src/TurdTracker/
+- MudBlazor CSS/JS referenced in wwwroot/index.html
+- Build from repo root: `DOTNET_CLI_USE_MSBUILD_SERVER=0 dotnet build src/TurdTracker/TurdTracker.csproj`
+- DiaryService uses LocalStorage key "diary-entries"
+- DI registration pattern: `builder.Services.AddScoped<IService, Service>()` in Program.cs
+- Page injection pattern: `@using TurdTracker.Services` + `@inject IDiaryService DiaryService`
+- `_Imports.razor` has global `@using TurdTracker.Services` — no per-page using needed
+- MudBlazor v9 MUD0002 warning: avoid HTML attributes like `Title` on MudBlazor components; use MudBlazor-specific props
+- Client ID for Google OAuth: 101133685796-p43f4uqejgt9lgce4lvibrnoam8oegb1.apps.googleusercontent.com
+- SyncService subscribes to `DiaryService.OnDataChanged` with 2-second debounce; temporarily unsubscribes during `ReplaceAllAsync` to avoid sync loops
+- SyncService handles 412 (re-download + re-merge + retry up to 3x) and 401 (silent re-auth) automatically
+- Inject `ISyncService` for sync operations; call `InitializeAsync()` on app startup
+- DiaryService internal reads use private `GetAllRawAsync()` (unfiltered); public `GetAllAsync()` filters soft-deleted entries
+- `OnDataChanged` event pattern: fire after `SaveAsync()` in mutating methods (Add, Update, Delete)
+- JS interop files live in `wwwroot/js/`; call from C# via `IJSRuntime.InvokeAsync("googleAuth.method", args)` (no `window.` prefix)
+- GoogleAuthService wraps JS interop; inject `IGoogleAuthService` for auth operations
+- GoogleDriveService uses HttpClient with Bearer token; inject `IGoogleDriveService` for Drive file operations
+- Google Drive API: files endpoint at `https://www.googleapis.com/drive/v3/files`, upload at `https://www.googleapis.com/upload/drive/v3/files`
+- Sync file name: `turdtracker-sync.json` stored in `appDataFolder` space
+- MergeEngine is static — call `MergeEngine.Merge(local, remote)` and check `MergeResult.LocalChanged`/`RemoteChanged` to decide what to save/upload
+- MainLayout.razor: sync icon is between MudSpacer and theme toggle; uses `@implements IDisposable` to clean up event subscriptions
+- Use `InvokeAsync(StateHasChanged)` when handling events from services (not on Blazor sync context)
+- MudBlazor v9.2.0 does not have `Icons.Material.Filled.Google` — use `Icons.Material.Filled.Cloud` as alternative
+
+---
+
+## 2026-03-24 - US-001
+- Removed `= DateTime.UtcNow` initializer from `DiaryEntry.LastModified` property
+- Files changed: `src/TurdTracker/Models/DiaryEntry.cs`
+- **Learnings for future iterations:**
+  - `DiaryService.AddAsync()`, `UpdateAsync()`, and `DeleteAsync()` all explicitly set `LastModified = DateTime.UtcNow` before saving, so the model doesn't need a default initializer
+  - The backfill migration in `BackfillLastModifiedIfNeeded` checks for `default(DateTime)` — any initializer on the property would prevent detection of legacy entries
+---
+
+## 2026-03-24 - US-002
+- Replaced all `Version` references with `ETag` across GoogleDriveService, IGoogleDriveService, and SyncService
+- Changed Drive API field requests from `version` to `etag` in query strings
+- Updated FileResponse model to use `[JsonPropertyName("etag")]` on `ETag` property
+- Updated If-Match header in UpdateFileAsync to use etag value
+- Files changed: `src/TurdTracker/Services/GoogleDriveService.cs`, `src/TurdTracker/Services/IGoogleDriveService.cs`, `src/TurdTracker/Services/SyncService.cs`
+- **Learnings for future iterations:**
+  - Google Drive API's If-Match header expects an ETag string, not a version number
+  - The tuple naming convention flows through interface → implementation → caller (SyncService), so renaming requires updating all three layers
+  - Drive API `fields` parameter uses lowercase property names (`etag`, not `ETag`)
+---
+
+## 2026-03-24 - US-003
+- Captured `RemoveAll` return value as `purgedCount` in MergeEngine.Merge
+- When `purgedCount > 0`, set both `localChanged` and `remoteChanged` to true so purges persist
+- Files changed: `src/TurdTracker/Services/MergeEngine.cs`
+- **Learnings for future iterations:**
+  - `List<T>.RemoveAll()` returns the count of removed elements — always capture the return value when you need to know if anything changed
+  - MergeEngine is a static class with a pure merge function; changes to merge logic only require editing this one file
+---
+
+## 2026-03-24 - US-004
+- Wrapped unsubscribe/ReplaceAllAsync/resubscribe in try/finally so OnDataChanged re-subscription is guaranteed
+- Files changed: `src/TurdTracker/Services/SyncService.cs`
+- **Learnings for future iterations:**
+  - When temporarily unsubscribing from events around an async call, always use try/finally to guarantee re-subscription
+  - The pattern is: unsubscribe → try { await operation } finally { resubscribe }
+---
+
+## 2026-03-24 - US-005
+- Stored previous CTS reference before canceling, disposed it, then created new CTS
+- Files changed: `src/TurdTracker/Services/SyncService.cs`
+- **Learnings for future iterations:**
+  - When replacing a CancellationTokenSource in a debounce pattern, always: 1) store reference to old CTS, 2) cancel it, 3) dispose it, 4) create new one
+  - The Dispose() method already handled final cleanup of _debounceCts — the leak was only in the repeated-edit path within OnDataChanged
+---
+
+## 2026-03-24 - US-006
+- Split HttpRequestException catch into two: `when (ex.StatusCode is null)` for offline (skip silently) and unfiltered catch for real HTTP errors (set Error status)
+- Files changed: `src/TurdTracker/Services/SyncService.cs`
+- **Learnings for future iterations:**
+  - `HttpRequestException.StatusCode` is null for network/DNS/offline failures and has a value for actual HTTP responses (403, 429, 500, etc.)
+  - Use exception filters (`when`) to distinguish — the more specific filter must come first since both catch the same type
+  - The retry logic in `SyncWithRetryAsync` already handles 412 and 401 specifically; this outer catch handles everything else that bubbles up
+---
+
+## 2026-03-24 - US-007
+- Added `_initialized` flag and `EnsureInitializedAsync()` to GoogleAuthService
+- Made `InitializeAsync` idempotent (early return if already initialized)
+- `SignInAsync`, `IsSignedInAsync`, and `GetAccessTokenAsync` all call `EnsureInitializedAsync` before JS interop
+- `SignOutAsync` intentionally does NOT call `EnsureInitializedAsync` — signing out doesn't need initialization
+- Files changed: `src/TurdTracker/Services/GoogleAuthService.cs`
+- **Learnings for future iterations:**
+  - GoogleAuthService is registered as scoped, so `_initialized` flag is per-circuit/per-tab — no thread-safety concern for Blazor WASM
+  - The lazy init pattern means callers don't need to worry about initialization order — any method that needs auth will auto-initialize
+---
+
+## 2026-03-24 - US-008
+- Replaced `SetAuthHeaderAsync` (which set `DefaultRequestHeaders.Authorization` on the shared HttpClient) with `GetAuthTokenAsync` that returns the token string
+- `GetAuthTokenAsync` throws `InvalidOperationException` if token is null or empty
+- Converted `FindSyncFileAsync` and `DownloadSyncFileAsync` from `GetAsync` to `HttpRequestMessage` + `SendAsync` with per-request Authorization header
+- Converted `CreateFileAsync` from `PostAsync` to `HttpRequestMessage` + `SendAsync` with per-request Authorization header
+- Added per-request Authorization header to `UpdateFileAsync` (already used `HttpRequestMessage`)
+- Removed `SetAuthHeaderAsync` call from `UploadSyncFileAsync` since `CreateFileAsync`/`UpdateFileAsync` now handle auth individually
+- Files changed: `src/TurdTracker/Services/GoogleDriveService.cs`
+- **Learnings for future iterations:**
+  - Setting `DefaultRequestHeaders.Authorization` on a shared `HttpClient` leaks credentials to any other code using the same client — always prefer per-request headers
+  - `HttpRequestMessage` + `SendAsync` is the standard pattern for per-request headers; set `request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token)`
+  - Each method that makes an HTTP call should independently call `GetAuthTokenAsync` rather than relying on a shared setup step
+---
+
+## 2026-03-24 - US-009
+- Added `await SyncService.SyncAsync()` call after `GoogleAuthService.SignOutAsync()` in Settings.razor `OnSignOutClick`
+- SyncAsync already detects not-signed-in state and sets SyncStatus to NotSignedIn, which triggers OnSyncStatusChanged
+- MainLayout already maps NotSignedIn to grey CloudOff icon — no changes needed there
+- Files changed: `src/TurdTracker/Pages/Settings.razor`
+- **Learnings for future iterations:**
+  - SyncAsync is designed to be called in any auth state — it checks IsSignedInAsync() first and sets NotSignedIn status if needed
+  - The OnSyncStatusChanged event propagates status changes from SyncService → MainLayout automatically via the existing subscription
+  - When adding post-sign-out behavior, leverage existing sync flow rather than manually setting status
+---
+
+## 2026-03-24 - US-010
+- Added conditional `sync-spinning` CSS class to sync MudIconButton when SyncStatus == Syncing
+- Added `::deep .sync-spinning svg` CSS rule that applies the existing `spin` keyframes animation
+- Files changed: `src/TurdTracker/Layout/MainLayout.razor`, `src/TurdTracker/Layout/MainLayout.razor.css`
+- **Learnings for future iterations:**
+  - MudBlazor icon buttons render SVGs inside them — target `svg` descendant for icon animations
+  - Use `::deep` in scoped CSS to pierce MudBlazor component shadow boundaries
+  - The `@keyframes spin` was already defined in the CSS file but not used — always check for existing keyframes before adding new ones
+  - Conditional CSS classes in Blazor: `Class="@(condition ? "class-name" : "")"`
+---
+
+## 2026-03-24 - US-011
+- Added `string? LastError` property to `ISyncService` interface and `SyncService` implementation
+- `SyncAsync` clears `LastError` at the start of each call, captures `ex.Message` in HTTP error and general exception catch blocks
+- MainLayout snackbar displays `SyncService.LastError` when available, falls back to generic message if null
+- Files changed: `src/TurdTracker/Services/ISyncService.cs`, `src/TurdTracker/Services/SyncService.cs`, `src/TurdTracker/Layout/MainLayout.razor`
+- **Learnings for future iterations:**
+  - The offline catch (`ex.StatusCode is null`) intentionally does NOT set `LastError` — offline is expected and handled silently
+  - `LastError` is cleared after both the "already syncing" and auth-check early-return guards, so it resets for normal sync attempts but is preserved when a call is skipped because a sync is already in progress
+  - The snackbar in `OnSyncIconClick` only fires when clicked during Error state — `LastError` provides the detail, generic message is the fallback
+---

@@ -1,17 +1,17 @@
 {
   "project": "TurdTracker",
-  "branchName": "ralph/sync-review-fixes",
-  "description": "Google Drive Sync — PR Review Bug Fixes. Critical correctness fixes, reliability improvements, and UX polish from Copilot review of PR #1.",
+  "branchName": "ralph/sync-ui-refresh",
+  "description": "Sync UI Refresh — Pages don't update after sync downloads new data from Google Drive. Add OnDataMerged event and page subscriptions so synced entries appear without manual refresh. Add status notification for sync completion.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix LastModified deserialization for legacy entries",
-      "description": "As a developer, I need legacy diary entries to deserialize with default(DateTime) for LastModified so the backfill migration correctly detects and fixes them.",
+      "title": "Add OnDataMerged event to SyncService",
+      "description": "As a developer, I need SyncService to fire an event when sync has downloaded and saved new entries locally, so pages can subscribe and refresh their data.",
       "acceptanceCriteria": [
-        "DiaryEntry.LastModified property has no initializer (remove '= DateTime.UtcNow')",
-        "DiaryService.AddAsync() still explicitly sets LastModified = DateTime.UtcNow before saving",
-        "Entries deserialized from LocalStorage that lack a LastModified field get default(DateTime) (0001-01-01)",
-        "BackfillLastModifiedIfNeeded in DiaryService detects default(DateTime) and backfills from Timestamp.ToUniversalTime()",
+        "ISyncService exposes 'event Action? OnDataMerged'",
+        "SyncService fires OnDataMerged after ReplaceAllAsync() completes, only when MergeResult.LocalChanged is true",
+        "OnDataMerged fires AFTER OnDataChanged re-subscription is restored in the finally block",
+        "OnDataMerged is NOT fired when sync finds no local changes needed",
         "Typecheck passes"
       ],
       "priority": 1,
@@ -20,16 +20,15 @@
     },
     {
       "id": "US-002",
-      "title": "Use ETag instead of Version for Drive concurrency control",
-      "description": "As a developer, I need the Google Drive service to use etag for the If-Match header because Drive's If-Match expects an ETag, not a version number.",
+      "title": "Home page refreshes entries after sync merge",
+      "description": "As a user, I want the Home page to automatically show new entries from other devices after sync completes, so I don't have to refresh the page.",
       "acceptanceCriteria": [
-        "FindSyncFileAsync requests fields=files(id,etag) instead of fields=files(id,version)",
-        "Upload URLs use fields=id,etag instead of fields=id,version",
-        "FileResponse model uses [JsonPropertyName(\"etag\")] on a property named ETag",
-        "IGoogleDriveService return tuples use ETag instead of Version",
-        "SyncService.PerformSyncAsync passes etag to upload calls",
-        "If-Match header in UpdateFileAsync uses the etag value",
-        "Typecheck passes"
+        "Home.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-fetches entries via DiaryService.GetAllAsync() and updates the displayed list with the same ordering",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
       "passes": true,
@@ -37,12 +36,15 @@
     },
     {
       "id": "US-003",
-      "title": "Fix tombstone purge not persisting changes",
-      "description": "As a developer, I need the merge engine to set LocalChanged and RemoteChanged when tombstones are purged so the purge actually gets saved and uploaded.",
+      "title": "Calendar page refreshes after sync merge",
+      "description": "As a user, I want the Calendar page to show synced entries without a page refresh.",
       "acceptanceCriteria": [
-        "MergeEngine.Merge captures the count returned by RemoveAll for tombstone purge",
-        "If purgedCount > 0, both localChanged and remoteChanged are set to true",
-        "Typecheck passes"
+        "Calendar.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-fetches diary entries and re-renders calendar data",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
       "passes": true,
@@ -50,12 +52,15 @@
     },
     {
       "id": "US-004",
-      "title": "Guarantee OnDataChanged re-subscription after ReplaceAllAsync",
-      "description": "As a developer, I need the sync service to re-subscribe to OnDataChanged even if ReplaceAllAsync throws, so auto-sync never silently stops.",
+      "title": "Stats page refreshes after sync merge",
+      "description": "As a user, I want the Stats page to reflect synced data without a page refresh.",
       "acceptanceCriteria": [
-        "PerformSyncAsync wraps the unsubscribe/ReplaceAllAsync/resubscribe in try/finally",
-        "The finally block always executes _diaryService.OnDataChanged += OnDataChanged",
-        "Typecheck passes"
+        "Stats.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-computes statistics from updated data",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
       "passes": true,
@@ -63,12 +68,13 @@
     },
     {
       "id": "US-005",
-      "title": "Fix CancellationTokenSource leak in debounce",
-      "description": "As a developer, I need the debounce handler to dispose the previous CancellationTokenSource to prevent resource leaks from repeated edits.",
+      "title": "Export page refreshes after sync merge",
+      "description": "As a user, I want the Export page to include synced entries without a page refresh.",
       "acceptanceCriteria": [
-        "OnDataChanged stores a reference to the previous CTS before canceling",
-        "Previous CTS is disposed after canceling and before creating the replacement",
-        "New CTS is created and token captured after disposal",
+        "Export.razor subscribes to SyncService.OnDataMerged in OnInitializedAsync",
+        "On merge event, re-fetches entry data",
+        "Uses InvokeAsync(StateHasChanged) pattern for thread-safe UI update",
+        "Unsubscribes from OnDataMerged in Dispose() — add @implements IDisposable if not already present",
         "Typecheck passes"
       ],
       "priority": 5,
@@ -77,94 +83,18 @@
     },
     {
       "id": "US-006",
-      "title": "Distinguish offline errors from real HTTP failures",
-      "description": "As a user, I want real sync errors (403, 429, 500) to show as errors instead of being silently swallowed as offline.",
+      "title": "Show snackbar notification when sync downloads new data",
+      "description": "As a user, I want to see a brief notification when sync has pulled new data so I know my app is up to date across devices.",
       "acceptanceCriteria": [
-        "SyncAsync catches HttpRequestException and checks ex.StatusCode",
-        "When StatusCode is null (network/offline failure), sync skips silently and reverts to previous state",
-        "When StatusCode has a value (e.g. 403, 429, 500), SyncStatus is set to Error",
-        "Typecheck passes"
+        "MainLayout.razor subscribes to SyncService.OnDataMerged",
+        "On merge event, shows a MudBlazor snackbar with message like 'Sync complete — new entries loaded'",
+        "Snackbar auto-dismisses after 3 seconds",
+        "Normal syncs with no new data do NOT show this snackbar (only OnDataMerged triggers it)",
+        "Unsubscribes from OnDataMerged in Dispose()",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-007",
-      "title": "Lazy-initialize Google Auth to prevent race conditions",
-      "description": "As a developer, I need GoogleAuthService to lazily initialize so sign-in works from any call site without depending on layout initialization order.",
-      "acceptanceCriteria": [
-        "GoogleAuthService has a private bool _initialized flag (default false)",
-        "InitializeAsync sets _initialized = true after calling JS initialize and is idempotent (skips if already initialized)",
-        "A private EnsureInitializedAsync method calls InitializeAsync if _initialized is false",
-        "SignInAsync, IsSignedInAsync, and GetAccessTokenAsync all call EnsureInitializedAsync before their JS interop calls",
-        "Typecheck passes"
-      ],
-      "priority": 7,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-008",
-      "title": "Set auth header per-request instead of on shared HttpClient",
-      "description": "As a developer, I need the Google Drive service to set Authorization on individual requests to prevent the Bearer token from leaking to non-Drive requests.",
-      "acceptanceCriteria": [
-        "SetAuthHeaderAsync is replaced with a GetAuthTokenAsync method that returns the token string",
-        "GetAuthTokenAsync throws InvalidOperationException if token is null or empty",
-        "FindSyncFileAsync uses HttpRequestMessage + SendAsync instead of GetAsync, with Authorization header on the request",
-        "DownloadSyncFileAsync uses HttpRequestMessage + SendAsync instead of GetAsync, with Authorization header on the request",
-        "CreateFileAsync sets Authorization header on the HttpRequestMessage (new request message for POST)",
-        "UpdateFileAsync already uses HttpRequestMessage — add Authorization header on it",
-        "_httpClient.DefaultRequestHeaders.Authorization is never set anywhere",
-        "Typecheck passes"
-      ],
-      "priority": 8,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-009",
-      "title": "Sign-out updates sync status in app bar",
-      "description": "As a user, I want the app bar sync icon to immediately show Not Signed In after I sign out instead of staying green.",
-      "acceptanceCriteria": [
-        "Settings.razor OnSignOutClick calls SyncService.SyncAsync() after GoogleAuthService.SignOutAsync()",
-        "SyncAsync detects not-signed-in and sets SyncStatus to NotSignedIn",
-        "App bar sync icon changes to grey CloudOff after sign-out",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-010",
-      "title": "Apply spin animation to syncing icon",
-      "description": "As a user, I want the sync icon to spin while syncing so I can see something is happening.",
-      "acceptanceCriteria": [
-        "The sync MudIconButton in MainLayout gets a conditional CSS class (e.g. 'sync-spinning') when SyncStatus == Syncing",
-        "The existing spin keyframes in MainLayout.razor.css are applied via that class selector",
-        "The icon stops spinning when sync completes or errors",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-011",
-      "title": "Show actual error details in sync error snackbar",
-      "description": "As a user, I want to see what went wrong when sync fails instead of a generic message.",
-      "acceptanceCriteria": [
-        "ISyncService has a string? LastError property",
-        "SyncService captures ex.Message in catch blocks and stores it in LastError",
-        "LastError is cleared (set to null) at the start of each SyncAsync call",
-        "MainLayout error snackbar displays SyncService.LastError when available, falling back to generic message if null",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 11,
       "passes": true,
       "notes": ""
     }
