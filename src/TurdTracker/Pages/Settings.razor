@@ -46,7 +46,8 @@
                     </MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Error"
                                StartIcon="@Icons.Material.Filled.Logout"
-                               OnClick="@OnSignOutClick">
+                               OnClick="@OnSignOutClick"
+                               Disabled="@(SyncService.SyncStatus == SyncStatus.Syncing)">
                         Sign Out
                     </MudButton>
                 </MudStack>

@@ -74,6 +74,14 @@ public class SyncService : ISyncService, IDisposable
         try
         {
             await SyncWithRetryAsync();
+
+            // Re-check auth state in case sign-out occurred during the sync
+            if (!await _authService.IsSignedInAsync())
+            {
+                SetStatus(SyncStatus.NotSignedIn);
+                return;
+            }
+
             LastSyncedUtc = DateTime.UtcNow;
             SetStatus(SyncStatus.Synced);
         }
@@ -112,7 +120,10 @@ public class SyncService : ISyncService, IDisposable
             }
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
-                // 401 — attempt silent re-auth
+                // 401 — only attempt re-auth if still signed in (not an intentional sign-out)
+                if (!await _authService.IsSignedInAsync())
+                    throw;
+
                 var token = await _authService.SignInAsync();
                 if (token == null)
                     throw;
