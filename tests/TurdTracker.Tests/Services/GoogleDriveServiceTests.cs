@@ -33,13 +33,21 @@ public class GoogleDriveServiceTests : IDisposable
     {
         var responseJson = JsonSerializer.Serialize(new
         {
-            files = new[] { new { id = "file-123", etag = "\"etag-abc\"" } }
+            files = new[] { new { id = "file-123" } }
         });
 
         _handler.RespondTo("drive/v3/files?", new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
         });
+
+        // Second request fetches the individual file to get ETag from response header
+        var fileResponse = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"id\":\"file-123\"}", System.Text.Encoding.UTF8, "application/json"),
+            Headers = { ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"etag-abc\"") }
+        };
+        _handler.RespondTo("drive/v3/files/file-123", fileResponse);
 
         var (fileId, etag) = await _sut.FindSyncFileAsync();
 
@@ -100,11 +108,12 @@ public class GoogleDriveServiceTests : IDisposable
     [Fact]
     public async Task UploadSyncFileAsync_CreatesNewFile_WhenFileIdIsNull()
     {
-        var responseJson = JsonSerializer.Serialize(new { id = "new-file-id", etag = "\"new-etag\"" });
+        var responseJson = JsonSerializer.Serialize(new { id = "new-file-id" });
 
         _handler.RespondTo("uploadType=multipart", new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json"),
+            Headers = { ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"new-etag\"") }
         });
 
         var envelope = new SyncEnvelope { Version = "1", Entries = [] };
@@ -121,11 +130,12 @@ public class GoogleDriveServiceTests : IDisposable
     [Fact]
     public async Task UploadSyncFileAsync_UpdatesExistingFile_WithIfMatchEtagHeader()
     {
-        var responseJson = JsonSerializer.Serialize(new { id = "existing-id", etag = "\"updated-etag\"" });
+        var responseJson = JsonSerializer.Serialize(new { id = "existing-id" });
 
         _handler.RespondTo("uploadType=media", new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json"),
+            Headers = { ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"updated-etag\"") }
         });
 
         var envelope = new SyncEnvelope { Version = "1", Entries = [] };
