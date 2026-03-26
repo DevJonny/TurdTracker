@@ -162,6 +162,7 @@ public class SyncService : ISyncService, IDisposable
             try
             {
                 await _diaryService.ReplaceAllAsync(result.MergedEntries);
+                try { OnDataMerged?.Invoke(); } catch { /* subscriber exception must not fail sync */ }
             }
             finally
             {
