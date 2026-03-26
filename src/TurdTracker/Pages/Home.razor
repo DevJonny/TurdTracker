@@ -121,9 +121,9 @@
     {
         if (firstRender)
         {
-            var isSignedIn = await GoogleAuthService.IsSignedInAsync();
+            var hasPreviousSession = await GoogleAuthService.HasPreviousSessionAsync();
             var isDismissed = await LocalStorage.GetItemAsync<bool>(BannerDismissedKey);
-            _showBanner = !isSignedIn && !isDismissed;
+            _showBanner = !hasPreviousSession && !isDismissed;
             StateHasChanged();
         }
     }

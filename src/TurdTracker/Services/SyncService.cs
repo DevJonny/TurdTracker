@@ -41,15 +41,9 @@ public class SyncService : ISyncService, IDisposable
         }
         else if (await _authService.HasPreviousSessionAsync())
         {
-            if (await _authService.TrySilentSignInAsync())
-            {
-                SetStatus(SyncStatus.Idle);
-                await SyncAsync();
-            }
-            else
-            {
-                SetStatus(SyncStatus.NotSignedIn);
-            }
+            // Previous session exists but no active token yet — set Idle
+            // and let SyncAsync acquire a token when triggered
+            SetStatus(SyncStatus.Idle);
         }
         else
         {
@@ -64,9 +58,22 @@ public class SyncService : ISyncService, IDisposable
 
         if (!await _authService.IsSignedInAsync())
         {
-            LastError = null;
-            SetStatus(SyncStatus.NotSignedIn);
-            return;
+            // If user previously signed in, prompt for a new token
+            if (await _authService.HasPreviousSessionAsync())
+            {
+                var token = await _authService.SignInAsync();
+                if (token == null)
+                {
+                    SetStatus(SyncStatus.NotSignedIn);
+                    return;
+                }
+            }
+            else
+            {
+                LastError = null;
+                SetStatus(SyncStatus.NotSignedIn);
+                return;
+            }
         }
 
         LastError = null;

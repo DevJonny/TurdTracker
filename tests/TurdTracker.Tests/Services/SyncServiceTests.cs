@@ -45,29 +45,17 @@ public class SyncServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task InitializeAsync_WithPreviousSession_SilentSignInSuccess_TriggersSyncAndSynced()
+    public async Task InitializeAsync_WithPreviousSession_SetsIdleWithoutPopup()
     {
-        // Arrange: not currently signed in, but has previous session, silent sign-in succeeds
+        // Arrange: not currently signed in, but has previous session
         _authService.IsSignedIn = false;
         _authService.HasPreviousSession = true;
-        _authService.SilentSignInResult = true;
 
-        // After TrySilentSignInAsync succeeds, IsSignedInAsync needs to return true for SyncAsync
-        // We need to set IsSignedIn after TrySilentSignIn is called
-        // Since our fake is simple, we'll set IsSignedIn = true when TrySilentSignIn returns true
-        // Actually, we need to handle this: InitializeAsync calls IsSignedInAsync (false),
-        // then HasPreviousSessionAsync (true), then TrySilentSignInAsync (true),
-        // then SyncAsync which calls IsSignedInAsync again.
-        // We need IsSignedIn to become true after silent sign-in.
+        await _sut.InitializeAsync();
 
-        // Workaround: Override to make IsSignedIn switch after silent sign-in
-        var authService = new FakeGoogleAuthServiceWithSilentSignInSwitch();
-        using var sut = new SyncService(_diaryService, authService, _driveService);
-
-        await sut.InitializeAsync();
-
-        sut.SyncStatus.Should().Be(SyncStatus.Synced);
-        sut.LastSyncedUtc.Should().NotBeNull();
+        // Should set Idle without triggering sign-in popup or sync
+        _sut.SyncStatus.Should().Be(SyncStatus.Idle);
+        _sut.LastSyncedUtc.Should().BeNull();
     }
 
     [Fact]
@@ -488,56 +476,6 @@ public class SyncServiceTests : IDisposable
     /// <summary>
     /// Helper fake that switches IsSignedIn to true after TrySilentSignInAsync is called.
     /// </summary>
-    private class FakeGoogleAuthServiceWithSilentSignInSwitch : IGoogleAuthService
-    {
-        private bool _isSignedIn;
-        public List<string> MethodCalls { get; } = [];
-
-        public Task InitializeAsync()
-        {
-            MethodCalls.Add(nameof(InitializeAsync));
-            return Task.CompletedTask;
-        }
-
-        public Task<string?> SignInAsync()
-        {
-            MethodCalls.Add(nameof(SignInAsync));
-            return Task.FromResult<string?>("token");
-        }
-
-        public Task SignOutAsync()
-        {
-            MethodCalls.Add(nameof(SignOutAsync));
-            _isSignedIn = false;
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> IsSignedInAsync()
-        {
-            MethodCalls.Add(nameof(IsSignedInAsync));
-            return Task.FromResult(_isSignedIn);
-        }
-
-        public Task<string?> GetAccessTokenAsync()
-        {
-            MethodCalls.Add(nameof(GetAccessTokenAsync));
-            return Task.FromResult<string?>("token");
-        }
-
-        public Task<bool> TrySilentSignInAsync()
-        {
-            MethodCalls.Add(nameof(TrySilentSignInAsync));
-            _isSignedIn = true; // Simulate successful silent sign-in
-            return Task.FromResult(true);
-        }
-
-        public Task<bool> HasPreviousSessionAsync()
-        {
-            MethodCalls.Add(nameof(HasPreviousSessionAsync));
-            return Task.FromResult(true);
-        }
-    }
-
     /// <summary>
     /// Drive service that blocks on FindSyncFileAsync until a task completes (for concurrency testing).
     /// </summary>

@@ -111,17 +111,16 @@ public class HomeTests : IAsyncDisposable
     }
 
     [Fact]
-    public void SyncBanner_HiddenWhenSignedIn()
+    public void SyncBanner_HiddenWhenPreviousSession()
     {
-        _authService.IsSignedIn = true;
+        _authService.HasPreviousSession = true;
 
         var cut = _ctx.Render<Home>();
 
-        // After render, banner check runs — signed in means no banner
-        // Give it time to process OnAfterRenderAsync
+        // After render, banner check runs — previous session means no banner
         cut.WaitForState(() => !cut.Markup.Contains("Google Drive") || true, TimeSpan.FromSeconds(1));
 
-        // Banner should not appear since user is signed in
+        // Banner should not appear since user has a previous session
         cut.Markup.Should().NotContain("Connect Google Drive");
     }
 
