@@ -252,3 +252,14 @@
   - MudIconButton rendered as SVG icons — no text content; select Edit by `button.mud-icon-button.mud-primary-text`, Delete by `button.mud-icon-button.mud-error-text`
   - FakeDialogService with configurable `MessageBoxResult` property is the cleanest way to test dialog confirmation flows
 ---
+
+## 2026-03-26 - US-017
+- Created 6 Settings page bUnit component tests in tests/TurdTracker.Tests/Pages/SettingsTests.cs
+- Covers: sign-in calls SignInAsync and on success sets signed-in state + SyncAsync, sign-out calls SignOutAsync then SyncAsync, Sync Now calls SyncAsync, buttons disabled when SyncStatus==Syncing, sync status text/icon reflects current status (with OnSyncStatusChanged event updates), LastSyncedUtc displayed when available
+- Files changed: 1 new file (Pages/SettingsTests.cs)
+- **Learnings for future iterations:**
+  - Settings page uses OnAfterRenderAsync (firstRender) to load state — bUnit triggers this automatically on Render
+  - Sign-in button is `button.mud-button-filled`, sign-out/sync-now are `button.mud-button-outlined` — distinguish by TextContent
+  - FakeSyncService.RaiseOnSyncStatusChanged() triggers InvokeAsync(StateHasChanged) in Settings page — use cut.WaitForState() to assert re-render
+  - Settings page subscribes to OnSyncStatusChanged in OnAfterRenderAsync and unsubscribes in Dispose
+---
