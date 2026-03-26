@@ -1,4 +1,10 @@
 ## Codebase Patterns
+- xUnit v3 (xunit.v3 1.1.0) requires explicit `using Xunit;` — not included in ImplicitUsings
+- Test files go in mirrored folder structure: tests/TurdTracker.Tests/Services/ for service tests, tests/TurdTracker.Tests/Components/ for component tests
+- bUnit component tests: use `BunitContext` with `JSRuntimeMode.Loose` and `AddMudServices()` for MudBlazor components
+- Components using MudTextField with OnKeyDown (KeyInterceptorService) require `IAsyncDisposable` + `DisposeAsync()` instead of `IDisposable` in test class
+- Registering services in bUnit: `_ctx.Services.AddSingleton<IService>(fake)` requires `using Microsoft.Extensions.DependencyInjection;`
+- bUnit `EventCallback.Factory.Create<T>(this, handler)` requires `using Microsoft.AspNetCore.Components;`
 - Build command: `DOTNET_CLI_USE_MSBUILD_SERVER=0 DOTNET_HOST_PATH=$(which dotnet) dotnet build` (required on macOS ARM64 to avoid task host error)
 - `wasm-tools` workload must be installed (`dotnet workload install wasm-tools`) — without it, ComputeWasmBuildAssets fails with MSB4216
 - Build with sandbox disabled for NuGet restore (network access required)
@@ -22,8 +28,184 @@
 - Test project at tests/TurdTracker.Tests/ using xUnit + bUnit + FluentAssertions
 - Fakes go in tests/TurdTracker.Tests/Fakes/ folder
 - Use bUnit's built-in JSInterop for JS call verification (not hand-rolled IJSRuntime fake)
-- FakeLocalStorageService backed by Dictionary<string, object>
+- FakeLocalStorageService backed by Dictionary<string, object> — uses ValueTask returns, nullable T? on GetItemAsync
+- FakeDiaryService.SeedEntries() for test setup without triggering events or recording method calls
+- FakeGoogleDriveService.CreateHttpException(statusCode) helper for creating typed HTTP exceptions
+- FakeSyncService has extra OnDataMerged event (not yet on ISyncService interface)
 - Test file naming: {ClassUnderTest}Tests.cs in mirrored folder structure
 - Run tests: `dotnet test tests/TurdTracker.Tests/TurdTracker.Tests.csproj`
+- bUnit JSInterop: use `JSRuntimeMode.Loose` for services that make many JS calls; verify with `_ctx.JSInterop.Invocations["identifier"]`
+- bUnit v2.0.33-preview: use `BunitContext` (not `TestContext` which is ambiguous with xUnit v3's `Xunit.TestContext`)
+- bUnit JSInterop `Setup<T>(identifier).SetResult(value)` for typed returns; void calls handled automatically in Loose mode
+- GoogleDriveService: construct with `new GoogleDriveService(new HttpClient(fakeHandler), fakeAuthService)` — no DI needed
+- DiaryEntry.Id is `Guid` (not string) — use `Guid.NewGuid()` directly
+- FluentAssertions v8: method is `BeGreaterThanOrEqualTo` (not `BeGreaterOrEqualTo`)
+- SyncService.Dispose() doesn't guard against double-dispose — use separate instances in Dispose tests to avoid class IDisposable conflicts
+- For retry/error testing, use inline fakes with Queue<Exception> to control per-call behavior (e.g., ConfigurableDriveService)
+- ISyncService now has `event Action? OnDataMerged` — pages subscribe in OnInitializedAsync, unsubscribe in Dispose
+- bUnit NavigationManager: `_ctx.Services.GetRequiredService<NavigationManager>()` — no FakeNavigationManager in bUnit v2
+- Page tests go in tests/TurdTracker.Tests/Pages/ — use IAsyncDisposable for MudBlazor components
+- bUnit renders `<b>` with Blazor scope attributes (e.g. `<b b-xxx>`) — use CSS selector `.calendar-cell b` instead of `InnerHtml.Contains("<b>")`
+- MudIconButton renders as `button.mud-icon-button` — select by CSS class, not by icon name in outerHtml
+- Empty calendar cells have no innerHTML — use `string.IsNullOrWhiteSpace(c.InnerHtml)` to identify offset cells
 
+---
+
+## 2026-03-25 21:28 - US-001
+- Created xUnit test project at tests/TurdTracker.Tests/ with bUnit, FluentAssertions, Blazored.LocalStorage, MudBlazor
+- Created GitHub Actions workflow at .github/workflows/test.yml triggering on PRs to main
+- Project references src/TurdTracker/TurdTracker.csproj, builds and runs with zero tests
+- **Learnings for future iterations:**
+  - bUnit v2.0.33-preview is the version compatible with .NET 10
+  - xunit.v3 v1.1.0 + xunit.runner.visualstudio v3.1.0 for xUnit v3 on .NET 10
+  - FluentAssertions v8.3.0 works with .NET 10
+  - Microsoft.NET.Test.Sdk v17.13.0 needed for test discovery
+---
+
+## 2026-03-25 22:00 - US-002
+- Created 7 hand-rolled fakes in tests/TurdTracker.Tests/Fakes/:
+  - FakeLocalStorageService: Dictionary-backed ILocalStorageService with all methods
+  - FakeDiaryService: In-memory List<DiaryEntry>, tracks MethodCalls, has SeedEntries() helper
+  - FakeGoogleAuthService: Configurable return values for all methods, tracks MethodCalls
+  - FakeGoogleDriveService: Configurable results/exceptions, records upload details, has CreateHttpException() helper
+  - FakeSyncService: Settable SyncStatus/LastError/LastSyncedUtc, invocable OnSyncStatusChanged/OnDataMerged events
+  - FakeThemeService: In-memory dark mode state (defaults to true)
+  - FakeHttpMessageHandler: URL-pattern and predicate-based response matching, tracks SentRequests
+- Files changed: 7 new files in tests/TurdTracker.Tests/Fakes/
+- **Learnings for future iterations:**
+  - Blazored.LocalStorage 4.5.0 uses ValueTask returns and nullable T? on GetItemAsync
+  - ILocalStorageService has ChangingEventArgs/ChangedEventArgs events — suppress CS0067 in fake
+  - ISyncService doesn't have OnDataMerged yet — added as extra public event on FakeSyncService for future test stories
+  - FakeDiaryService.SeedEntries() bypasses events/call-tracking for clean test setup
+---
+
+## 2026-03-25 22:35 - US-003
+- Created 9 MergeEngine unit tests in tests/TurdTracker.Tests/Services/MergeEngineTests.cs
+- Covers: empty merge, local-only, remote-only, local-wins, remote-wins, tie-break, tombstone purge (old/young), mixed scenario
+- Files changed: 1 new file (MergeEngineTests.cs)
+- **Learnings for future iterations:**
+  - xUnit v3 requires explicit `using Xunit;` — ImplicitUsings does not include it
+  - MergeEngine tie-break: equal LastModified → local wins but neither changed flag is set (code uses strict > for remoteChanged)
+  - MergeEngine is static — test directly with `MergeEngine.Merge(local, remote)`, no DI needed
+---
+
+## 2026-03-25 23:10 - US-004
+- Created 11 DiaryService unit tests in tests/TurdTracker.Tests/Services/DiaryServiceTests.cs
+- Covers: AddAsync (store + LastModified + event), GetAllAsync (filters deleted), GetAllIncludingDeletedAsync, GetByIdAsync (found + not found), GetByDateAsync, UpdateAsync (update + event), UpdateAsync (non-existent ID no event), DeleteAsync (soft-delete + LastModified + event), ReplaceAllAsync (no event), BackfillLastModifiedIfNeeded (migration)
+- Files changed: 1 new file (DiaryServiceTests.cs)
+- **Learnings for future iterations:**
+  - DiaryService uses real `new DiaryService(fakeLocalStorage)` — no DI container needed for unit tests
+  - AddAsync sets IsDeleted entries into storage as-is — the filtering happens in GetAllAsync
+  - BackfillLastModifiedIfNeeded only runs once per DiaryService instance (_hasMigrated flag) — seed data directly into FakeLocalStorageService to test migration
+  - DiaryService storage key is "diary-entries" — use this to seed test data directly into FakeLocalStorageService
+---
+
+## 2026-03-25 - US-005
+- Created 3 ThemeService unit tests in tests/TurdTracker.Tests/Services/ThemeServiceTests.cs
+- Covers: GetIsDarkModeAsync default (true when no value), GetIsDarkModeAsync returns stored value, SetIsDarkModeAsync writes to localStorage
+- Files changed: 1 new file (ThemeServiceTests.cs)
+- **Learnings for future iterations:**
+  - ThemeService storage key is "theme-dark-mode"
+  - ThemeService defaults to dark mode (true) when no localStorage value exists
+  - Simple services like ThemeService can be tested with just FakeLocalStorageService — no DI container needed
+---
+
+## 2026-03-25 - US-006
+- Created 7 GoogleAuthService unit tests in tests/TurdTracker.Tests/Services/GoogleAuthServiceTests.cs
+- Covers: InitializeAsync idempotency, SignInAsync (ensure init + JS call), SignOutAsync, IsSignedInAsync (ensure init + JS call), GetAccessTokenAsync, TrySilentSignInAsync (true when token, false when null)
+- Files changed: 1 new file (GoogleAuthServiceTests.cs)
+- **Learnings for future iterations:**
+  - bUnit `TestContext` is ambiguous with xUnit v3's `Xunit.TestContext` — use `BunitContext` instead
+  - bUnit JSInterop in strict mode requires explicit `SetupVoid` with argument matchers for each call; `JSRuntimeMode.Loose` is simpler for service-level tests
+  - GoogleAuthService uses double-check locking pattern with SemaphoreSlim for initialization — tests verify idempotency
+  - `Setup<string?>("identifier").SetResult((string?)null)` to test null return values
+---
+
+## 2026-03-25 - US-007
+- Created 6 GoogleDriveService unit tests in tests/TurdTracker.Tests/Services/GoogleDriveServiceTests.cs
+- Covers: FindSyncFileAsync (file exists → returns id/etag, no file → nulls), DownloadSyncFileAsync (deserializes SyncEnvelope), UploadSyncFileAsync (create new file when fileId null, update existing with If-Match etag, 412 conflict throws HttpRequestException)
+- Files changed: 1 new file (GoogleDriveServiceTests.cs)
+- **Learnings for future iterations:**
+  - GoogleDriveService takes HttpClient + IGoogleAuthService via constructor — use FakeHttpMessageHandler with HttpClient for testing
+  - FakeHttpMessageHandler URL pattern matching is substring-based — use distinctive URL fragments like "alt=media", "uploadType=multipart", "uploadType=media"
+  - DiaryEntry.Id is `Guid` not `string` — use `Guid.NewGuid()` directly
+  - EnsureSuccessStatusCode() throws HttpRequestException on non-2xx — no need to simulate specific exception types for 412/401 tests
+- SyncService concurrency guard: if SyncStatus == Syncing, SyncAsync returns immediately — use a SlowFake with TaskCompletionSource to test this
+- SyncService has no OnDataMerged event — PRD references it but it was never merged from archived feature branch
+- For testing InitializeAsync with silent sign-in, need a custom fake that switches IsSignedIn to true after TrySilentSignInAsync (standard FakeGoogleAuthService can't model this state change)
+---
+
+## 2026-03-25 - US-008
+- Created 9 SyncService unit tests in tests/TurdTracker.Tests/Services/SyncServiceTests.cs
+- Covers: InitializeAsync (signed-in → sync, silent sign-in → sync, no session → NotSignedIn), SyncAsync (not signed in, happy path status transitions, concurrent call guard), merge results (LocalChanged → ReplaceAllAsync, RemoteChanged → UploadSyncFileAsync, OnDataChanged resubscription)
+- Helper fakes: FakeGoogleAuthServiceWithSilentSignInSwitch (models sign-in state change), SlowFakeGoogleDriveService (TaskCompletionSource for concurrency testing)
+- Files changed: 1 new file (SyncServiceTests.cs)
+- **Learnings for future iterations:**
+  - SyncService concurrency: SyncAsync returns immediately if SyncStatus == Syncing — use SlowFake with TaskCompletionSource to block first call while attempting second
+  - SyncService InitializeAsync flow: checks IsSignedIn → HasPreviousSession → TrySilentSignIn, each branch needs its own test setup
+  - OnDataMerged is referenced in PRD but not implemented in SyncService — archived feature branch was never merged
+  - FakeGoogleAuthService can't model state transitions (e.g. IsSignedIn changing after TrySilentSignIn) — need custom inline fakes for these scenarios
+---
+
+## 2026-03-25 - US-009
+- Created 10 SyncService error/retry/debounce tests in tests/TurdTracker.Tests/Services/SyncServiceTests.cs
+- Covers: 412 retry (success + exhausted), 401 re-auth retry, network error revert, 500 error, general exception, LastError cleared, debounce cancellation, OnDataChanged re-subscription on ReplaceAll exception, Dispose cancels debounce
+- Helper fakes: ConfigurableDriveService (queue-based upload exceptions), ThrowingDriveService (always throws), ThrowingOnReplaceDiaryService (throws on ReplaceAllAsync with toggle)
+- Files changed: 1 modified file (SyncServiceTests.cs — added ~339 lines)
+- **Learnings for future iterations:**
+  - FluentAssertions v8: use `BeGreaterThanOrEqualTo` not `BeGreaterOrEqualTo`
+  - SyncService.Dispose() does not null out _debounceCts after disposing — calling Dispose twice causes ObjectDisposedException; use separate SyncService instances in Dispose tests to avoid class-level IDisposable double-dispose
+  - Debounce tests require ~3.5s wait (2s delay + margin) — acceptable for unit tests but slows suite
+  - ConfigurableDriveService with Queue<Exception> for upload exceptions is the most flexible pattern for retry testing — dequeues one exception per call, succeeds when empty
+  - HttpRequestException with null StatusCode (network error) is distinct from one with a status code — SyncService handles them differently
+---
+
+## 2026-03-25 - US-010
+- Created 4 BristolScaleSelector bUnit component tests in tests/TurdTracker.Tests/Components/BristolScaleSelectorTests.cs
+- Covers: renders all 7 Bristol type cards with names, selected card has bristol-card-selected class, clicking card invokes SelectedTypeChanged with correct value, no card selected when SelectedType=0
+- Files changed: 1 new file (Components/BristolScaleSelectorTests.cs)
+- **Learnings for future iterations:**
+  - bUnit component tests need `BunitContext` with `JSRuntimeMode.Loose` and `AddMudServices()` for MudBlazor components
+  - `EventCallback.Factory.Create<T>(receiver, handler)` requires `using Microsoft.AspNetCore.Components;` — not included by default
+  - MudBlazor renders CSS classes on elements — use `.bristol-card` CSS selector to find cards, check `.ClassList` for selected state
+  - Component tests go in tests/TurdTracker.Tests/Components/ mirroring the source structure
+---
+
+## 2026-03-26 - US-011
+- Created 5 TagInput bUnit component tests in tests/TurdTracker.Tests/Components/TagInputTests.cs
+- Covers: add tag via Enter key (TagsChanged callback), duplicate tag case-insensitive rejection, remove tag (TagsChanged callback), text field cleared after add, recent tags loaded from DiaryService (top 10, deduped, excluding current)
+- Fixed compilation: added `using Microsoft.Extensions.DependencyInjection;` for `AddSingleton` on `BunitServiceProvider`
+- Fixed disposal: MudTextField's OnKeyDown registers KeyInterceptorService (IAsyncDisposable) — switched from `IDisposable` to `IAsyncDisposable` with `DisposeAsync()`
+- Files changed: 1 new file (Components/TagInputTests.cs)
+- **Learnings for future iterations:**
+  - `BunitServiceProvider` doesn't have `AddSingleton` directly — need `using Microsoft.Extensions.DependencyInjection;` for extension methods
+  - Components with MudTextField + OnKeyDown register MudBlazor's `KeyInterceptorService` which only implements `IAsyncDisposable` — test class must use `IAsyncDisposable` + `DisposeAsync()` instead of `IDisposable`
+  - bUnit `input.Change("value")` + `input.KeyDown(new KeyboardEventArgs { Key = "Enter" })` to simulate typing and pressing Enter
+  - MudChip close buttons found via `.mud-chip button` selector
+---
+
+## 2026-03-26 - US-012
+- Created 8 Home page bUnit component tests in tests/TurdTracker.Tests/Pages/HomeTests.cs
+- Covers: empty entries message + Log Entry button, entry cards (Bristol type, timestamp, truncated notes at 80 chars, tags), clicking card navigates to /entry/{Id}, sync banner shown when not signed in and not dismissed, banner hidden when signed in, banner hidden when dismissed, OnDataMerged refreshes entries, Dispose unsubscribes OnDataMerged
+- Added `event Action? OnDataMerged` to ISyncService interface and SyncService implementation (fires after ReplaceAllAsync when localChanged)
+- Updated Home.razor to subscribe to OnDataMerged (refresh entries) and implement IDisposable (unsubscribe)
+- Files changed: ISyncService.cs (added OnDataMerged), SyncService.cs (added OnDataMerged event + fire), Home.razor (subscribe/dispose), HomeTests.cs (new)
+- **Learnings for future iterations:**
+  - ISyncService now has `event Action? OnDataMerged` — all pages that refresh on sync should subscribe to this
+  - bUnit NavigationManager: use `_ctx.Services.GetRequiredService<NavigationManager>()` (from Microsoft.AspNetCore.Components) — bUnit v2 doesn't expose FakeNavigationManager directly
+  - Home.razor OnAfterRenderAsync runs after first render — use `cut.WaitForState()` in tests to wait for async state changes
+  - Page test files go in tests/TurdTracker.Tests/Pages/ mirroring the source structure
+  - `async void` event handlers with `InvokeAsync(StateHasChanged)` for cross-thread UI updates from service events
+---
+
+## 2026-03-26 - US-013
+- Created 8 Calendar page bUnit component tests in tests/TurdTracker.Tests/Pages/CalendarTests.cs
+- Covers: correct number of days for current month, Monday-start day-of-week offset, entry count badges on dates with entries, clicking date selects and shows entries, previous/next month navigation, empty selected date shows "No entries for this day", OnDataMerged refreshes entries, Dispose unsubscribes OnDataMerged
+- Updated Calendar.razor to inject ISyncService, subscribe to OnDataMerged, implement IDisposable, and extracted RebuildEntriesByDate() helper
+- Files changed: Calendar.razor (added ISyncService injection, OnDataMerged subscription, IDisposable), CalendarTests.cs (new)
+- **Learnings for future iterations:**
+  - bUnit renders `<b>` tags with Blazor scope attributes (e.g. `<b b-5a6vurbgxm>`) — never match `<b>` as literal string in InnerHtml; use CSS selectors like `.calendar-cell b` instead
+  - MudIconButton renders as `button.mud-icon-button` — select by CSS class, don't look for icon name strings in outerHtml
+  - Empty calendar offset cells have no innerHTML — use `string.IsNullOrWhiteSpace(c.InnerHtml)` to distinguish from day cells
+  - `QuerySelectorAll("b")` on individual elements works for finding nested elements within a bUnit-found node
 ---
