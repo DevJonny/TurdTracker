@@ -58,6 +58,10 @@
 - IDialogService.ShowAsync returns `Task<IDialogReference>` (not bare IDialogReference)
 - bUnit JSInterop void call verification: use `SetupVoid("identifier")` + `VerifyInvoke("identifier")` — Loose mode handles the call but doesn't track it for verification without explicit Setup
 - Reflection to set private fields for testing: `typeof(Component).GetField("_field", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, value)` — useful for MudDatePicker bound values
+- MudBlazor Color.Default renders buttons WITHOUT a color-text CSS class — select by excluding known classes (mud-success-text, mud-error-text, etc.)
+- MudTooltip v9: trigger `PointerEnter()` on `.mud-tooltip-root` to show tooltip popover content (not MouseOver)
+- LayoutComponentBase tests: `_ctx.Render<Layout>(p => p.Add(x => x.Body, builder => builder.AddContent(0, "text")))`
+- Theme toggle in appbar: filter buttons by `Closest(".mud-tooltip-root") == null` to distinguish from sync icon button
 
 ---
 
@@ -276,4 +280,17 @@
   - PrintExport has Task.Delay(100) — async tests need await Task.Delay(200) before verifying JS interop calls
   - bUnit JSInterop: use SetupVoid("window.print") + VerifyInvoke("window.print") for void JS calls — Loose mode auto-handles but doesn't track for verification
   - Export page filter is applied in PrintExport() and OnInitializedAsync() — clicking export button re-applies current filter settings
+---
+
+## 2026-03-26 - US-019
+- Created 11 MainLayout bUnit component tests in tests/TurdTracker.Tests/Layout/MainLayoutTests.cs
+- Added OnDataMerged subscription to MainLayout.razor — fires "Sync complete" snackbar when status is Synced or Idle
+- Covers: sync icon CloudDone/Success when Synced, CloudSync/Inherit+spin when Syncing, CloudOff/Error when Error, CloudOff/Default when NotSignedIn, clicking error sync icon shows snackbar with LastError, OnDataMerged shows "Sync complete" snackbar (Synced + Idle), no snackbar when Syncing, theme toggle dark/light mode, tooltip shows status + LastSyncedUtc, tooltip shows "Not synced yet" when no last sync
+- Files changed: MainLayout.razor (added OnDataMerged subscription/dispose + OnDataMerged handler with snackbar), MainLayoutTests.cs (new)
+- **Learnings for future iterations:**
+  - MudBlazor Color.Default renders icon buttons WITHOUT a color-text CSS class — select by excluding known color classes (mud-success-text, mud-error-text, mud-inherit-text, etc.)
+  - MudTooltip v9 uses pointer events — trigger `PointerEnter()` on `.mud-tooltip-root` to show tooltip content in popover (not `MouseOver`)
+  - Theme toggle button: distinguish from sync icon by filtering out buttons inside `.mud-tooltip-root` using `Closest(".mud-tooltip-root") == null`
+  - LayoutComponentBase tests: render with `parameters.Add(p => p.Body, builder => builder.AddContent(0, "content"))` for body slot
+  - MudSnackbar: `Snackbar.Add(message, severity)` renders message content in `MudSnackbarProvider` — assertable via `cut.Markup.Contains(message)`
 ---
