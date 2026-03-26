@@ -56,6 +56,8 @@
 - MudIconButton: select Edit by `button.mud-icon-button.mud-primary-text`, Delete by `button.mud-icon-button.mud-error-text` — SVG icons have no text content
 - FakeDialogService: `IDialogService.DialogInstanceAddedAsync` is `event Func<IDialogReference, Task>?`, `OnDialogCloseRequested` is `event Action<IDialogReference, DialogResult?>?` — not EventHandler types
 - IDialogService.ShowAsync returns `Task<IDialogReference>` (not bare IDialogReference)
+- bUnit JSInterop void call verification: use `SetupVoid("identifier")` + `VerifyInvoke("identifier")` — Loose mode handles the call but doesn't track it for verification without explicit Setup
+- Reflection to set private fields for testing: `typeof(Component).GetField("_field", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, value)` — useful for MudDatePicker bound values
 
 ---
 
@@ -262,4 +264,16 @@
   - Sign-in button is `button.mud-button-filled`, sign-out/sync-now are `button.mud-button-outlined` — distinguish by TextContent
   - FakeSyncService.RaiseOnSyncStatusChanged() triggers InvokeAsync(StateHasChanged) in Settings page — use cut.WaitForState() to assert re-render
   - Settings page subscribes to OnSyncStatusChanged in OnAfterRenderAsync and unsubscribes in Dispose
+---
+
+## 2026-03-26 - US-018
+- Created 6 Export page bUnit component tests in tests/TurdTracker.Tests/Pages/ExportTests.cs
+- Updated Export.razor to inject ISyncService, subscribe to OnDataMerged, implement IDisposable with entry refresh on sync
+- Covers: all entries shown when no date filter, start date filter excludes before, end date filter excludes after, both filters combined, export button calls window.print via JS interop, OnDataMerged refreshes entries
+- Files changed: Export.razor (added ISyncService injection, OnDataMerged subscription, IDisposable), ExportTests.cs (new)
+- **Learnings for future iterations:**
+  - MudDatePicker private field values can be set via reflection for testing date filtering (typeof(Export).GetField("_startDate", BindingFlags.NonPublic | BindingFlags.Instance))
+  - PrintExport has Task.Delay(100) — async tests need await Task.Delay(200) before verifying JS interop calls
+  - bUnit JSInterop: use SetupVoid("window.print") + VerifyInvoke("window.print") for void JS calls — Loose mode auto-handles but doesn't track for verification
+  - Export page filter is applied in PrintExport() and OnInitializedAsync() — clicking export button re-applies current filter settings
 ---
