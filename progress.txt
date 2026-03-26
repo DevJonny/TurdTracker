@@ -48,6 +48,14 @@
 - bUnit renders `<b>` with Blazor scope attributes (e.g. `<b b-xxx>`) — use CSS selector `.calendar-cell b` instead of `InnerHtml.Contains("<b>")`
 - MudIconButton renders as `button.mud-icon-button` — select by CSS class, not by icon name in outerHtml
 - Empty calendar cells have no innerHTML — use `string.IsNullOrWhiteSpace(c.InnerHtml)` to identify offset cells
+- MudBlazor BarChart always renders SVG even when all data values are zero — `_frequencyData.Length == 0` never triggers because BuildFrequencyChart creates array with `days` elements; use `.All(d => d == 0)` check if you want to show empty state
+- MudBlazor BarChart: select bars via `.mud-chart-bar` CSS class inside `svg.mud-chart-bar`; bar count equals data array length
+- 30-day frequency chart labels only show every 5th day (`i % 5 == 0`) — don't rely on date labels for assertions; use bar count instead
+- Stats page: MudChipSet `SelectedValueChanged` triggers `OnRangeChanged` — click `.mud-chip` elements to switch range in tests
+- MudDatePicker/MudTimePicker require `MudPopoverProvider` in the render tree — render `_ctx.Render<MudPopoverProvider>()` before rendering the component under test
+- MudIconButton: select Edit by `button.mud-icon-button.mud-primary-text`, Delete by `button.mud-icon-button.mud-error-text` — SVG icons have no text content
+- FakeDialogService: `IDialogService.DialogInstanceAddedAsync` is `event Func<IDialogReference, Task>?`, `OnDialogCloseRequested` is `event Action<IDialogReference, DialogResult?>?` — not EventHandler types
+- IDialogService.ShowAsync returns `Task<IDialogReference>` (not bare IDialogReference)
 
 ---
 
@@ -208,4 +216,39 @@
   - MudIconButton renders as `button.mud-icon-button` — select by CSS class, don't look for icon name strings in outerHtml
   - Empty calendar offset cells have no innerHTML — use `string.IsNullOrWhiteSpace(c.InnerHtml)` to distinguish from day cells
   - `QuerySelectorAll("b")` on individual elements works for finding nested elements within a bUnit-found node
+---
+
+## 2026-03-26 - US-014
+- Created 7 Stats page bUnit component tests in tests/TurdTracker.Tests/Pages/StatsTests.cs
+- Covers: frequency chart daily counts for 7-day range, Bristol distribution tallies types 1-7, time of day chart buckets by hour, time range chip selection rebuilds frequency chart (7→30 bars), empty data renders without errors, OnDataMerged rebuilds charts, Dispose unsubscribes OnDataMerged
+- Updated Stats.razor to inject ISyncService, subscribe to OnDataMerged, implement IDisposable with chart rebuild on sync
+- Files changed: Stats.razor (added ISyncService injection, OnDataMerged subscription, IDisposable), StatsTests.cs (new)
+- **Learnings for future iterations:**
+  - MudBlazor BarChart always renders SVG even with all-zero data — `_frequencyData.Length == 0` never triggers; use `.All(d => d == 0)` for empty state detection
+  - 30-day frequency chart labels show every 5th day only — don't assert on specific date labels; assert bar count instead (7 bars vs 30 bars)
+  - MudBlazor BarChart bars selectable via `.mud-chart-bar` class inside `svg.mud-chart-bar` — bar count equals data array length
+  - Stats page has 3 independent chart sections — each has its own empty-state check and SVG rendering
+---
+
+## 2026-03-26 - US-015
+- Created 4 Log page bUnit component tests in tests/TurdTracker.Tests/Pages/LogTests.cs
+- Covers: save with BristolType=0 shows validation error (no AddAsync call), save with valid data calls AddAsync with correct entry and navigates to /, entry timestamp combines date and time, cancel navigates to /
+- Files changed: 1 new file (Pages/LogTests.cs)
+- **Learnings for future iterations:**
+  - MudDatePicker/MudTimePicker require `MudPopoverProvider` in the render tree — render `_ctx.Render<MudPopoverProvider>()` before the component under test
+  - Log page uses default `DateTime.Today` and `DateTime.Now.TimeOfDay` — test timestamp by asserting date is today and time is non-zero
+  - Bristol card selection: click `.bristol-card` elements by index (0-based, type = index + 1)
+  - bUnit NavigationManager: assert `nav.Uri.Should().EndWith("/")` for home navigation (NavigateTo("") resolves to base URI with trailing slash)
+---
+
+## 2026-03-26 - US-016
+- Created FakeDialogService in tests/TurdTracker.Tests/Fakes/ implementing IDialogService with configurable MessageBoxResult and MethodCalls tracking
+- Created 6 EntryDetail page bUnit component tests in tests/TurdTracker.Tests/Pages/EntryDetailTests.cs
+- Covers: loads/displays entry by ID (Bristol type, timestamp, notes, tags), entry not found error, edit button toggles edit form with pre-populated fields, save in edit mode calls UpdateAsync and exits edit mode, cancel in edit mode exits without saving, delete shows confirmation and calls DeleteAsync then navigates home
+- Files changed: FakeDialogService.cs (new), EntryDetailTests.cs (new)
+- **Learnings for future iterations:**
+  - IDialogService has `event Func<IDialogReference, Task>? DialogInstanceAddedAsync` and `event Action<IDialogReference, DialogResult?>? OnDialogCloseRequested` — not standard EventHandler types
+  - IDialogService.ShowAsync methods return `Task<IDialogReference>` not bare `IDialogReference`
+  - MudIconButton rendered as SVG icons — no text content; select Edit by `button.mud-icon-button.mud-primary-text`, Delete by `button.mud-icon-button.mud-error-text`
+  - FakeDialogService with configurable `MessageBoxResult` property is the cleanest way to test dialog confirmation flows
 ---
