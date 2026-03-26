@@ -124,23 +124,11 @@
         _loading = false;
     }
 
-    private async void OnDataMerged()
-    {
-        _entries = await DiaryService.GetAllAsync();
-        RebuildEntriesByDate();
-        await InvokeAsync(StateHasChanged);
-    }
-
     private void RebuildEntriesByDate()
     {
         _entriesByDate = _entries
             .GroupBy(e => DateOnly.FromDateTime(e.Timestamp))
             .ToDictionary(g => g.Key, g => g.OrderBy(e => e.Timestamp).ToList());
-    }
-
-    public void Dispose()
-    {
-        SyncService.OnDataMerged -= OnDataMerged;
     }
 
     private void OnDataMerged()
