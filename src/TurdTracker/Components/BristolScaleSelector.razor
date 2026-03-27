@@ -7,7 +7,7 @@
     {
         var type = item;
         <MudItem xs="12" sm="6">
-            <MudPaper Class="@GetCardClass(type.Type)" Elevation="2" @onclick="() => SelectType(type.Type)" Style="cursor: pointer;">
+            <MudPaper Class="@GetCardClass(type.Type)" Elevation="@(SelectedType == type.Type ? 4 : 2)" @onclick="() => SelectType(type.Type)" Style="@GetCardStyle(type.Type)">
                 <div class="d-flex align-center pa-3">
                     <MudImage Src="@($"images/bristol-{type.Type}.svg")" Width="60" Height="60" Alt="@($"Type {type.Type}")" Class="mr-3" />
                     <div>
@@ -38,6 +38,13 @@
         return SelectedType == type
             ? "bristol-card bristol-card-selected"
             : "bristol-card";
+    }
+
+    private string GetCardStyle(int type)
+    {
+        return SelectedType == type
+            ? "cursor: pointer; border: 2px solid var(--mud-palette-primary); background-color: var(--mud-palette-primary-hover);"
+            : "cursor: pointer; border: 2px solid transparent;";
     }
 
     private static readonly List<BristolTypeInfo> BristolTypes =
